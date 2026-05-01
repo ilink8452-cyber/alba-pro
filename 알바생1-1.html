@@ -14,7 +14,7 @@
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, push, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getDatabase, ref, push, get, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 const firebaseConfig = {
   apiKey: "AIzaSyAhKNC0bkWDruBBkZbWvRPAUWEhkndPI5M",
   authDomain: "alba-pro.firebaseapp.com",
@@ -30,13 +30,31 @@ window._fbDb = db;
 window._fbRef = ref;
 window._fbPush = push;
 window._fbGet = get;
-// 사장앱 직원 목록 Firebase에서 로드
+window._fbRemove = remove;
+// 직원 목록 로드
 get(ref(db, 'alba_employees')).then(snap => {
   if(snap.exists()) {
     window._fbEmps = Object.values(snap.val());
-    if(typeof loadEmpList === 'function') loadEmpList(window._fbEmps);
+    if(typeof renderNameList === 'function') renderNameList(window._fbEmps);
   }
 }).catch(()=>{});
+// 잠금해제 신호 실시간 감지
+onValue(ref(db, 'alba_unlock'), (snap) => {
+  const data = snap.val();
+  if(!data) return;
+  const profile = JSON.parse(localStorage.getItem('alba_worker_profile')||'null');
+  if(!profile) return;
+  // 내 코드와 일치하는 해제 신호 확인
+  const keys = Object.keys(data);
+  keys.forEach(k => {
+    if(data[k].code === profile.code) {
+      // 잠금 해제
+      localStorage.removeItem('alba_worker_profile');
+      remove(ref(db, 'alba_unlock/' + k));
+      if(typeof unlockProfile === 'function') unlockProfile();
+    }
+  });
+});
 window._fbReady = true;
 </script>
 <style>
@@ -83,13 +101,42 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 <div class="hdr"><h1>알바생 근무입력</h1></div>
 <div class="pg">
 <div class="card">
-  <div class="card-title">이름 · 근무처</div>
-  <select id="empSelect" onchange="selectEmp()" style="width:100%;padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:14px;font-weight:700;background:#fff;margin-bottom:8px;">
-    <option value="">-- 이름을 선택하세요 --</option>
-  </select>
-  <div id="empWpInfo" style="font-size:13px;font-weight:600;color:var(--acc);text-align:center;min-height:18px;"></div>
-  <div id="addNameWrap" style="margin-top:8px;display:none;">
-    <button onclick="addMyName()" style="width:100%;padding:9px;border-radius:8px;border:none;background:var(--sur2);color:var(--acc);font-weight:700;font-size:13px;cursor:pointer;">+ 내 이름 직접 추가</button>
+  <!-- 잠금 전 — 이름 선택 -->
+  <div id="profileEdit">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--txt);">이름 · 근무처 선택</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div id="nameListWrap">
+        <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:4px;">이름</div>
+        <div id="nameList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:4px;">근무처</div>
+        <div id="selectedWp" style="padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:14px;font-weight:700;color:var(--mut);min-height:44px;display:flex;align-items:center;">-</div>
+      </div>
+    </div>
+    <div id="confirmWrap" style="display:none;">
+      <div style="font-size:13px;text-align:center;margin-bottom:10px;padding:10px;background:#fff9c4;border-radius:8px;border:1.5px solid #fbc02d;">
+        <strong id="confirmName" style="font-size:15px;"></strong>님이 맞습니까?
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="confirmProfile()" style="padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;box-shadow:0 4px 0 #0a2e0f;">맞습니다</button>
+        <button onclick="cancelConfirm()" style="padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);">다시 선택</button>
+      </div>
+    </div>
+  </div>
+  <!-- 잠금 후 — 고정 표시 -->
+  <div id="profileView" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div style="background:var(--sur2);border-radius:10px;padding:12px;text-align:center;border:1.5px solid var(--bdr);">
+        <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:4px;">이름</div>
+        <div id="profileName" style="font-size:16px;font-weight:700;color:var(--txt);"></div>
+      </div>
+      <div style="background:var(--sur2);border-radius:10px;padding:12px;text-align:center;border:1.5px solid var(--bdr);">
+        <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:4px;">근무처</div>
+        <div id="profileWp" style="font-size:16px;font-weight:700;color:var(--acc);"></div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:11px;color:var(--mut);">잠금됨 · 변경은 사장님께 요청하세요</div>
   </div>
 </div>
 <div class="card" id="calCard">
@@ -149,7 +196,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
   <div id="existingWorks" style="margin-top:6px;"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
     <button style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;box-shadow:0 3px 0 #0a2e0f;" onclick="saveWork()">저장</button>
-    <button style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);" onclick="closeModal('workModal')">취소</button>
+    <button style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);" onclick="closeModal('workModal')">닫기</button>
   </div>
 </div>
 </div>
@@ -172,53 +219,133 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 
 <script>
 const STORAGE_KEY='alba_worker_recs';
-let curEmp=null,curDate=new Date(),curWorkDate='';
-let empList=[];
+const PROFILE_KEY='alba_worker_profile';
+let curEmp=null, curDate=new Date(), curWorkDate='';
+let empList=[], selectedTemp=null;
+
+function genCode(name,wp){
+  let hash=0; const str=name+wp;
+  for(let i=0;i<str.length;i++) hash=((hash<<5)-hash)+str.charCodeAt(i);
+  return Math.abs(hash).toString(36).toUpperCase().substring(0,4).padEnd(4,'0');
+}
 
 window.onload=()=>{
   const now=new Date();
   curDate=new Date(now.getFullYear(),now.getMonth(),1);
-  setTimeout(()=>{
-    if(!window._fbEmps){
-      const saved=localStorage.getItem('alba_emp');
-      if(saved) loadEmpList(JSON.parse(saved));
-      else { loadEmpList([]); document.getElementById('addNameWrap').style.display='block'; }
-    } else { loadEmpList(window._fbEmps); }
-  },2000);
-  renderCal();
+  const saved=localStorage.getItem(PROFILE_KEY);
+  if(saved){
+    const p=JSON.parse(saved);
+    curEmp=p;
+    showProfileView(p);
+  } else {
+    // Firebase 직원 목록 대기
+    setTimeout(()=>{
+      if(!window._fbEmps){
+        const local=localStorage.getItem('alba_emp');
+        if(local) renderNameList(JSON.parse(local));
+      } else { renderNameList(window._fbEmps); }
+    },2000);
+  }
+  renderCal(); renderSummary();
   if('serviceWorker' in navigator) navigator.serviceWorker.register('worker-sw.js').catch(()=>{});
 };
 
-function loadEmpList(emps){
+// 이름 버튼 목록 렌더링
+function renderNameList(emps){
   empList=emps;
-  const s=document.getElementById('empSelect');
-  s.innerHTML='<option value="">-- 이름을 선택하세요 --</option>';
-  emps.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.name;s.appendChild(o);});
-  if(!emps.length) document.getElementById('addNameWrap').style.display='block';
-}
-
-function addMyName(){
-  const name=prompt('이름을 입력하세요');
-  if(!name||!name.trim())return;
-  const list=JSON.parse(localStorage.getItem('worker_names')||'[]');
-  list.push(name.trim());
-  localStorage.setItem('worker_names',JSON.stringify(list));
-  loadEmpList(empList.concat([{name:name.trim()}]));
-  showToast(name+'님 추가됐습니다');
-}
-
-function selectEmp(){
-  const val=document.getElementById('empSelect').value;
-  if(!val){
-    curEmp=null;
-    document.getElementById('empWpInfo').textContent='';
-    renderCal();renderSummary();
+  const c=document.getElementById('nameList');
+  if(!emps.length){
+    c.innerHTML='<div style="font-size:12px;color:var(--mut);">사장앱에 직원이 등록되어 있지 않습니다</div>';
     return;
   }
-  curEmp=empList[parseInt(val)];
-  const wpText=curEmp.wp?curEmp.wp:'';
-  document.getElementById('empWpInfo').textContent=wpText?curEmp.name+' · '+wpText:curEmp.name;
-  renderCal();renderSummary();
+  c.innerHTML=emps.map((e,i)=>
+    `<button id="namebtn_${i}" onclick="selectName(${i})"
+      style="width:100%;padding:10px;border-radius:8px;border:1.5px solid var(--bdr);
+      background:#fff;font-size:14px;font-weight:700;cursor:pointer;text-align:left;
+      transition:all .15s;">${e.name}</button>`
+  ).join('');
+}
+
+// 이름 선택 (아직 확정 전)
+function selectName(idx){
+  if(empList[idx]._locked) return; // 비활성화된 이름
+  selectedTemp=empList[idx];
+  // 선택된 버튼 하이라이트, 나머지 비활성화
+  empList.forEach((_,i)=>{
+    const btn=document.getElementById('namebtn_'+i);
+    if(!btn) return;
+    if(i===idx){
+      btn.style.background='#e8f5e9';
+      btn.style.borderColor='#2e7d32';
+      btn.style.color='#2e7d32';
+    } else {
+      btn.style.background='#f5f5f5';
+      btn.style.borderColor='var(--bdr)';
+      btn.style.color='#aaa';
+      btn.style.cursor='default';
+      btn.setAttribute('disabled','');
+    }
+  });
+  // 근무처 표시
+  document.getElementById('selectedWp').textContent=selectedTemp.wp||'-';
+  document.getElementById('selectedWp').style.color='var(--acc)';
+  document.getElementById('selectedWp').style.borderColor='#2e7d32';
+  // 확인 버튼 표시
+  document.getElementById('confirmName').textContent=selectedTemp.name;
+  document.getElementById('confirmWrap').style.display='block';
+}
+
+// 확인 버튼 — 잠금
+function confirmProfile(){
+  if(!selectedTemp) return;
+  const code=genCode(selectedTemp.name, selectedTemp.wp||'');
+  const profile={name:selectedTemp.name, wp:selectedTemp.wp||'', code};
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  curEmp=profile;
+  showProfileView(profile);
+  renderCal(); renderSummary();
+  showToast('설정이 완료됐습니다. 변경은 사장님께 요청하세요.');
+}
+
+// 다시 선택
+function cancelConfirm(){
+  selectedTemp=null;
+  document.getElementById('confirmWrap').style.display='none';
+  document.getElementById('selectedWp').textContent='-';
+  document.getElementById('selectedWp').style.color='var(--mut)';
+  document.getElementById('selectedWp').style.borderColor='var(--bdr)';
+  // 버튼 전체 다시 활성화
+  empList.forEach((_,i)=>{
+    const btn=document.getElementById('namebtn_'+i);
+    if(!btn) return;
+    btn.style.background='#fff';
+    btn.style.borderColor='var(--bdr)';
+    btn.style.color='var(--txt)';
+    btn.style.cursor='pointer';
+    btn.removeAttribute('disabled');
+  });
+}
+
+// 프로필 고정 표시
+function showProfileView(p){
+  document.getElementById('profileEdit').style.display='none';
+  document.getElementById('profileView').style.display='block';
+  document.getElementById('profileName').textContent=p.name;
+  document.getElementById('profileWp').textContent=p.wp;
+}
+
+// 사장앱 원격 잠금 해제
+function unlockProfile(){
+  curEmp=null;
+  selectedTemp=null;
+  document.getElementById('profileView').style.display='none';
+  document.getElementById('profileEdit').style.display='block';
+  document.getElementById('confirmWrap').style.display='none';
+  // 이름 목록 재렌더링
+  if(empList.length) renderNameList(empList);
+  else if(window._fbEmps) renderNameList(window._fbEmps);
+  renderCal(); renderSummary();
+  showToast('사장님이 잠금을 해제했습니다. 다시 선택하세요.');
 }
 
 function prevMonth(){curDate.setMonth(curDate.getMonth()-1);renderCal();renderSummary();}
@@ -238,7 +365,7 @@ function renderCal(){
   for(let d=1;d<=last;d++){
     const date=new Date(y,m,d);date.setHours(0,0,0,0);
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const works=curEmp?recs.filter(r=>r.emp===curEmp.name&&r.date===ds):[];
+    const works=curEmp?recs.filter(r=>r.emp===curEmp.name&&r.code===curEmp.code&&r.date===ds):[];
     let cls='cal-cell';
     if(date.getTime()===today.getTime())cls+=' today';
     if(works.length)cls+=' work';
@@ -250,15 +377,10 @@ function renderCal(){
 }
 
 function renderSummary(){
-  if(!curEmp)return;
   const y=curDate.getFullYear(),m=curDate.getMonth();
-  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
-  const c=document.getElementById('summaryList');
+  const recs=curEmp?getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&r.code===curEmp.code&&d.getFullYear()===y&&d.getMonth()===m;}):[];
   const totalH=recs.reduce((s,w)=>s+w.hours,0);
-  c.innerHTML=`<div style="display:flex;justify-content:space-between;padding:10px;background:#e8f5e9;border-radius:8px;font-weight:700;font-size:14px;">
-    <span>총 근무시간</span>
-    <span style="color:#2e7d32;">${totalH.toFixed(2)}h</span>
-  </div>`;
+  document.getElementById('summaryList').innerHTML=`<div style="display:flex;justify-content:space-between;padding:10px;background:#e8f5e9;border-radius:8px;font-weight:700;font-size:14px;"><span>총 근무시간</span><span style="color:#2e7d32;">${totalH.toFixed(2)}h</span></div>`;
 }
 
 let npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
@@ -293,21 +415,19 @@ function npRender(){
 }
 
 function openWork(ds){
-  if(!curEmp)return;
+  if(!curEmp){showToast('먼저 이름을 선택하세요');return;}
   curWorkDate=ds;
   document.getElementById('workTitle').textContent=`${ds} 근무입력`;
   document.getElementById('workDate').value=ds;
   document.getElementById('workIdx').value='';
-  const defS=curEmp.startTime?curEmp.startTime.replace(':',''):'0900';
-  const defE=curEmp.endTime?curEmp.endTime.replace(':',''):'1800';
-  npState={active:'start',startVal:defS,endVal:defE,buf:''};
+  npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
   npRender();loadExisting(ds);
   document.getElementById('workModal').style.display='flex';
 }
 
 function loadExisting(ds){
   const allRecs=getRecs();
-  const recs=allRecs.filter(r=>r.emp===curEmp.name&&r.date===ds);
+  const recs=allRecs.filter(r=>r.emp===curEmp.name&&r.code===curEmp.code&&r.date===ds);
   const c=document.getElementById('existingWorks');
   if(!recs.length){c.innerHTML='';return;}
   c.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:6px;">등록된 근무</div>'+
@@ -324,6 +444,7 @@ function deleteWork(idx){
 }
 
 function saveWork(){
+  if(!curEmp){showToast('먼저 이름을 선택하세요');return;}
   const ds=document.getElementById('workDate').value;
   const idx=document.getElementById('workIdx').value;
   const sv=npState.startVal.padStart(4,'0'),ev=npState.endVal.padStart(4,'0');
@@ -337,26 +458,26 @@ function saveWork(){
   if(mins<=0)return customAlert('입력 오류','올바른 시간을 입력하세요');
   const hours=mins/60;
   const recs=getRecs();
-  if(idx===''){recs.push({emp:curEmp.name,date:ds,start,end,hours});showToast('근무가 등록됐습니다');}
-  else{recs[idx]={emp:curEmp.name,date:ds,start,end,hours};showToast('근무가 수정됐습니다');}
+  if(idx===''){recs.push({emp:curEmp.name,code:curEmp.code,wp:curEmp.wp,date:ds,start,end,hours});showToast('근무가 등록됐습니다');}
+  else{recs[idx]={emp:curEmp.name,code:curEmp.code,wp:curEmp.wp,date:ds,start,end,hours};showToast('근무가 수정됐습니다');}
   saveRecs(recs);closeModal('workModal');renderCal();renderSummary();
 }
 
 function sendToManager(){
-  if(!curEmp){showToast('이름을 먼저 선택하세요');return;}
+  if(!curEmp){showToast('먼저 이름을 선택하세요');return;}
   const y=curDate.getFullYear(),m=curDate.getMonth();
-  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
+  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&r.code===curEmp.code&&d.getFullYear()===y&&d.getMonth()===m;});
   if(!recs.length){showToast('전송할 근무 데이터가 없습니다');return;}
-  const payload={type:'alba_work_data',emp:curEmp.name,year:y,month:m+1,records:recs,sentAt:new Date().toISOString()};
+  const payload={type:'alba_work_data',emp:curEmp.name,wp:curEmp.wp,code:curEmp.code,year:y,month:m+1,records:recs,sentAt:new Date().toISOString()};
   const resultEl=document.getElementById('sendResult');
-  resultEl.innerHTML='<div style="font-size:14px;margin-bottom:10px;font-weight:700;">전송 중...</div>';
+  resultEl.innerHTML='<div style="font-size:14px;font-weight:700;">전송 중...</div>';
   document.getElementById('sendModal').style.display='flex';
   if(window._fbDb&&window._fbPush&&window._fbRef){
     window._fbPush(window._fbRef(window._fbDb,'alba_pending'),payload)
       .then(()=>{
         resultEl.innerHTML=`<div style="font-weight:700;font-size:16px;margin-bottom:8px;">전송 완료!</div>
-        <div style="font-size:13px;color:var(--mut);">${curEmp.name}님 · ${y}년 ${m+1}월<br>${recs.length}건 · 총 ${recs.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>
-        <div style="margin-top:12px;font-size:12px;color:#2e7d32;font-weight:700;">사장앱에 자동으로 전달됩니다</div>`;
+        <div style="font-size:13px;color:var(--mut);">${curEmp.name} · ${curEmp.wp}<br>${y}년 ${m+1}월 · ${recs.length}건 · 총 ${recs.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>
+        <div style="margin-top:10px;font-size:12px;color:#2e7d32;font-weight:700;">사장앱에 자동으로 전달됩니다</div>`;
       })
       .catch(()=>fallbackSend(payload,resultEl));
   } else { fallbackSend(payload,resultEl); }
@@ -364,11 +485,8 @@ function sendToManager(){
 
 function fallbackSend(payload,resultEl){
   const text='[ALBA_DATA]'+JSON.stringify(payload);
-  if(navigator.share){
-    navigator.share({title:'근무데이터',text:text})
-      .then(()=>{resultEl.innerHTML='<div style="font-weight:700;">전송됐습니다</div>';})
-      .catch(()=>copyText(text,resultEl));
-  } else { copyText(text,resultEl); }
+  if(navigator.share){navigator.share({title:'근무데이터',text:text}).then(()=>{resultEl.innerHTML='<div style="font-weight:700;">전송됐습니다</div>';}).catch(()=>copyText(text,resultEl));}
+  else{copyText(text,resultEl);}
 }
 
 function copyText(text,resultEl){
@@ -384,6 +502,164 @@ function customConfirm(title,msg,cb){document.getElementById('confirmTitle').tex
 function customAlert(title,msg){document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMessage').textContent=msg;document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn" style="background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;grid-column:span 2;" onclick="confirmNo()">확인</button>';confirmCallback=null;document.getElementById('confirmModal').style.display='flex';}
 function confirmYes(){document.getElementById('confirmModal').style.display='none';if(confirmCallback)confirmCallback();confirmCallback=null;}
 function confirmNo(){document.getElementById('confirmModal').style.display='none';confirmCallback=null;}
+console.log('✅ 알바생1');
+
+function prevMonth(){curDate.setMonth(curDate.getMonth()-1);renderCal();renderSummary();}
+function nextMonth(){curDate.setMonth(curDate.getMonth()+1);renderCal();renderSummary();}
+function getRecs(){return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}
+function saveRecs(r){localStorage.setItem(STORAGE_KEY,JSON.stringify(r));}
+
+function renderCal(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  document.getElementById('calTitle').textContent=`${y}년 ${m+1}월`;
+  const first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate();
+  const recs=getRecs();
+  let html='';
+  ['일','월','화','수','목','금','토'].forEach((d,i)=>html+=`<div class="cal-header" style="${i===0?'color:#ef5350':i===6?'color:#1976d2':''}">${d}</div>`);
+  for(let i=0;i<first;i++)html+='<div></div>';
+  const today=new Date();today.setHours(0,0,0,0);
+  for(let d=1;d<=last;d++){
+    const date=new Date(y,m,d);date.setHours(0,0,0,0);
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const works=curEmp?recs.filter(r=>r.emp===curEmp.name&&r.code===curEmp.code&&r.date===ds):[];
+    let cls='cal-cell';
+    if(date.getTime()===today.getTime())cls+=' today';
+    if(works.length)cls+=' work';
+    const badge=works.length>1?`<span class="work-badge">${works.length}</span>`:'';
+    const oc=curEmp?`onclick="openWork('${ds}')"`:' ';
+    html+=`<div class="${cls}" ${oc}><div style="font-weight:700;font-size:12px;">${d}</div>${works.length?`<div style="font-size:9px;color:#2e7d32;font-weight:700;">${works.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>`:''} ${badge}</div>`;
+  }
+  document.getElementById('calendar').innerHTML=html;
+}
+
+function renderSummary(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  const recs=curEmp?getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&r.code===curEmp.code&&d.getFullYear()===y&&d.getMonth()===m;}):[];
+  const totalH=recs.reduce((s,w)=>s+w.hours,0);
+  document.getElementById('summaryList').innerHTML=`<div style="display:flex;justify-content:space-between;padding:10px;background:#e8f5e9;border-radius:8px;font-weight:700;font-size:14px;"><span>총 근무시간</span><span style="color:#2e7d32;">${totalH.toFixed(2)}h</span></div>`;
+}
+
+let npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+function npSetActive(w){npState.active=w;npState.buf='';npRender();}
+function npPress(n){
+  if(npState.buf.length>=4)return;
+  npState.buf+=String(n);
+  if(npState.buf.length===4){
+    const h=parseInt(npState.buf.substring(0,2)),m=parseInt(npState.buf.substring(2,4));
+    if(h>23||m>59){showToast('올바른 시간이 아닙니다');npState.buf='';}
+    else{if(npState.active==='start'){npState.startVal=npState.buf;npState.active='end';}else{npState.endVal=npState.buf;npState.active='start';}npState.buf='';}
+  }
+  npRender();
+}
+function npDel(){npState.buf=npState.buf.slice(0,-1);npRender();}
+function npClear(){npState.buf='';npRender();}
+function npFmt(v){const s=v.padStart(4,'0');return s.substring(0,2)+':'+s.substring(2,4);}
+function npRender(){
+  document.getElementById('npStartText').textContent=npFmt(npState.startVal);
+  document.getElementById('npEndText').textContent=npFmt(npState.endVal);
+  const isStart=npState.active==='start';
+  const sb=document.getElementById('npStartBox'),eb=document.getElementById('npEndBox');
+  sb.style.background=isStart?'#e3f2fd':'#fff';sb.style.borderColor=isStart?'#1a73e8':'var(--bdr)';
+  document.getElementById('npStartText').style.color=isStart?'#1a73e8':'var(--txt)';
+  eb.style.background=!isStart?'#fff3e0':'#fff';eb.style.borderColor=!isStart?'#f57c00':'var(--bdr)';
+  document.getElementById('npEndText').style.color=!isStart?'#f57c00':'var(--txt)';
+  const buf=npState.buf;
+  const hPart=buf.length>=1?buf.substring(0,Math.min(2,buf.length)).padEnd(2,'_'):'__';
+  const mPart=buf.length>=3?buf.substring(2,4).padEnd(2,'_'):'__';
+  document.getElementById('npBuffer').textContent=buf.length>0?hPart+':'+mPart:'';
+  document.getElementById('npHint').textContent=buf.length===0?(isStart?'출근 시간을 입력하세요':'퇴근 시간을 입력하세요'):'';
+}
+
+function openWork(ds){
+  if(!curEmp){showToast('먼저 이름과 근무처를 설정하세요');return;}
+  curWorkDate=ds;
+  document.getElementById('workTitle').textContent=`${ds} 근무입력`;
+  document.getElementById('workDate').value=ds;
+  document.getElementById('workIdx').value='';
+  npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+  npRender();loadExisting(ds);
+  document.getElementById('workModal').style.display='flex';
+}
+
+function loadExisting(ds){
+  const allRecs=getRecs();
+  const recs=allRecs.filter(r=>r.emp===curEmp.name&&r.code===curEmp.code&&r.date===ds);
+  const c=document.getElementById('existingWorks');
+  if(!recs.length){c.innerHTML='';return;}
+  c.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:6px;">등록된 근무</div>'+
+  recs.map(w=>`<div class="work-item"><div><strong>${w.start}~${w.end}</strong> (${w.hours.toFixed(2)}h)</div><div style="display:flex;gap:4px;"><button class="btn-sm btn-sm-warn" style="font-size:11px;padding:4px 8px;" onclick="editWork(${allRecs.indexOf(w)})">수정</button><button class="btn-sm btn-sm-red" style="font-size:11px;padding:4px 8px;" onclick="deleteWork(${allRecs.indexOf(w)})">삭제</button></div></div>`).join('');
+}
+
+function editWork(idx){const w=getRecs()[idx];document.getElementById('workIdx').value=idx;npState.startVal=w.start.replace(':','');npState.endVal=w.end.replace(':','');npState.buf='';npRender();}
+
+function deleteWork(idx){
+  customConfirm('근무 삭제','이 근무를 삭제할까요?',()=>{
+    const recs=getRecs();recs.splice(idx,1);saveRecs(recs);
+    loadExisting(curWorkDate);renderCal();renderSummary();showToast('삭제됐습니다');
+  });
+}
+
+function saveWork(){
+  if(!curEmp){showToast('먼저 이름과 근무처를 설정하세요');return;}
+  const ds=document.getElementById('workDate').value;
+  const idx=document.getElementById('workIdx').value;
+  const sv=npState.startVal.padStart(4,'0'),ev=npState.endVal.padStart(4,'0');
+  const sh=parseInt(sv.substring(0,2)),sm=parseInt(sv.substring(2,4));
+  const eh=parseInt(ev.substring(0,2)),em2=parseInt(ev.substring(2,4));
+  if(sh>23||sm>59||eh>23||em2>59)return customAlert('입력 오류','올바른 시간을 입력하세요');
+  const start=`${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`;
+  const end=`${String(eh).padStart(2,'0')}:${String(em2).padStart(2,'0')}`;
+  let mins=(eh*60+em2)-(sh*60+sm);
+  if(mins<=0)mins+=1440;
+  if(mins<=0)return customAlert('입력 오류','올바른 시간을 입력하세요');
+  const hours=mins/60;
+  const recs=getRecs();
+  if(idx===''){recs.push({emp:curEmp.name,code:curEmp.code,wp:curEmp.wp,date:ds,start,end,hours});showToast('근무가 등록됐습니다');}
+  else{recs[idx]={emp:curEmp.name,code:curEmp.code,wp:curEmp.wp,date:ds,start,end,hours};showToast('근무가 수정됐습니다');}
+  saveRecs(recs);closeModal('workModal');renderCal();renderSummary();
+}
+
+function sendToManager(){
+  if(!curEmp){showToast('먼저 이름과 근무처를 설정하세요');return;}
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&r.code===curEmp.code&&d.getFullYear()===y&&d.getMonth()===m;});
+  if(!recs.length){showToast('전송할 근무 데이터가 없습니다');return;}
+  const payload={type:'alba_work_data',emp:curEmp.name,wp:curEmp.wp,code:curEmp.code,year:y,month:m+1,records:recs,sentAt:new Date().toISOString()};
+  const resultEl=document.getElementById('sendResult');
+  resultEl.innerHTML='<div style="font-size:14px;font-weight:700;">전송 중...</div>';
+  document.getElementById('sendModal').style.display='flex';
+  if(window._fbDb&&window._fbPush&&window._fbRef){
+    window._fbPush(window._fbRef(window._fbDb,'alba_pending'),payload)
+      .then(()=>{
+        resultEl.innerHTML=`<div style="font-weight:700;font-size:16px;margin-bottom:8px;">전송 완료!</div>
+        <div style="font-size:13px;color:var(--mut);">${curEmp.name} · ${curEmp.wp}<br>${y}년 ${m+1}월 · ${recs.length}건 · 총 ${recs.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>
+        <div style="margin-top:10px;font-size:12px;color:#2e7d32;font-weight:700;">사장앱에 자동으로 전달됩니다</div>`;
+      })
+      .catch(()=>fallbackSend(payload,resultEl));
+  } else { fallbackSend(payload,resultEl); }
+}
+
+function fallbackSend(payload,resultEl){
+  const text='[ALBA_DATA]'+JSON.stringify(payload);
+  if(navigator.share){navigator.share({title:'근무데이터',text:text}).then(()=>{resultEl.innerHTML='<div style="font-weight:700;">전송됐습니다</div>';}).catch(()=>copyText(text,resultEl));}
+  else{copyText(text,resultEl);}
+}
+
+function copyText(text,resultEl){
+  const done=()=>{resultEl.innerHTML='<div style="font-weight:700;font-size:14px;margin-bottom:8px;">클립보드에 복사됐습니다</div><div style="font-size:12px;color:var(--mut);">카카오톡·문자로 사장님께 붙여넣기로 보내주세요</div>';};
+  if(navigator.clipboard){navigator.clipboard.writeText(text).then(done).catch(done);}
+  else{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();}
+}
+
+function closeModal(id){document.getElementById(id).style.display='none';}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+let confirmCallback=null;
+function customConfirm(title,msg,cb){document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMessage').textContent=msg;document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn confirm-btn-cancel" onclick="confirmNo()">취소</button><button class="confirm-btn" style="background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;" onclick="confirmYes()">확인</button>';confirmCallback=cb;document.getElementById('confirmModal').style.display='flex';}
+function customAlert(title,msg){document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMessage').textContent=msg;document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn" style="background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;grid-column:span 2;" onclick="confirmNo()">확인</button>';confirmCallback=null;document.getElementById('confirmModal').style.display='flex';}
+function confirmYes(){document.getElementById('confirmModal').style.display='none';if(confirmCallback)confirmCallback();confirmCallback=null;}
+function confirmNo(){document.getElementById('confirmModal').style.display='none';confirmCallback=null;}
+console.log('✅ 알바생1');
+
 console.log('✅ 알바생1');
 </script>
 </body>
