@@ -36,17 +36,39 @@ window._fbSet = set;
 window._fbPush = push;
 window._fbRemove = remove;
 window._fbGet = get;
-// 알바생 전송 대기 데이터 실시간 감지
+// 알바생 전송 데이터 실시간 자동 반영
 const pendingRef = ref(db, 'alba_pending');
 onValue(pendingRef, (snapshot) => {
   const data = snapshot.val();
   if(!data) return;
   const keys = Object.keys(data);
   if(keys.length === 0) return;
-  // 새 데이터 알림 배지
-  const badge = document.getElementById('pendingBadge');
-  if(badge) { badge.textContent = keys.length; badge.style.display='inline-flex'; }
-  window._pendingData = data;
+  // 새 데이터 자동 반영
+  keys.forEach(key => {
+    const payload = data[key];
+    if(!payload || !payload.emp || !payload.records) return;
+    // localStorage에 반영
+    const ST_REC = 'alba_rec';
+    const empsRaw = localStorage.getItem('alba_emp');
+    const emps = empsRaw ? JSON.parse(empsRaw) : [];
+    const emp = emps.find(e => e.name === payload.emp);
+    const recs = JSON.parse(localStorage.getItem(ST_REC) || '[]');
+    const dates = new Set(payload.records.map(r => r.date));
+    const filtered = recs.filter(r => !(r.emp === payload.emp && dates.has(r.date)));
+    const newRecs = payload.records.map(r => ({
+      emp: payload.emp, date: r.date, start: r.start, end: r.end, hours: r.hours,
+      wage: emp ? (emp.probation ? Math.floor(emp.wage*0.9) : emp.wage) : 0
+    }));
+    localStorage.setItem(ST_REC, JSON.stringify(filtered.concat(newRecs)));
+    // Firebase에서 처리 완료된 항목 삭제
+    remove(ref(db, 'alba_pending/' + key));
+    // 급여대장 갱신 (함수가 로드된 후에 호출)
+    if(typeof loadPayroll === 'function') loadPayroll();
+    // 토스트 알림
+    if(typeof showToast === 'function') {
+      showToast(`📲 ${payload.emp}님 근무데이터 ${newRecs.length}건 자동 반영됐습니다`);
+    }
+  });
 });
 window._fbReady = true;
 console.log('✅ Firebase 연결됨');
@@ -299,11 +321,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 </select>
 <button class="btn-sm btn-sm-blue" onclick="exportExcel()">엑셀</button>
 </div>
-<!-- 알바생 데이터 받기 -->
-<button class="btn-sm" onclick="showReceiveModal()" style="width:100%;margin-bottom:10px;padding:9px;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;border-radius:8px;font-size:12px;box-shadow:0 3px 0 #0a2e0f;position:relative;">
-  📥 알바생 데이터 받기
-  <span id="pendingBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef5350;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;align-items:center;justify-content:center;">0</span>
-</button>
+<!-- 알바생 데이터 자동수신 중 -->
 <div id="payrollTable"></div>
 </div>
 </div>
@@ -511,21 +529,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 </div>
 </div>
 
-<!-- 알바생 데이터 받기 모달 -->
-<div class="modal" id="receiveModal">
-<div class="modal-content">
-  <div class="modal-title">📥 알바생 데이터 받기</div>
-  <!-- Firebase 실시간 대기 목록 -->
-  <div id="fbPendingList" style="margin-bottom:12px;"></div>
-  <!-- 수동 붙여넣기 (폴백) -->
-  <details style="margin-bottom:10px;">
-    <summary style="font-size:12px;color:var(--mut);cursor:pointer;padding:6px;">수동으로 붙여넣기</summary>
-    <textarea id="receiveInput" style="width:100%;height:100px;padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:12px;resize:none;margin-top:8px;" placeholder="[ALBA_DATA]{...} 붙여넣기"></textarea>
-    <button style="width:100%;margin-top:8px;padding:10px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;" onclick="applyReceiveData()">반영하기</button>
-  </details>
-  <button style="width:100%;padding:11px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);" onclick="closeModal('receiveModal')">닫기</button>
-</div>
-</div>
+
 
 
 </div>
@@ -1398,78 +1402,12 @@ document.getElementById('npHint').textContent=buf.length===0?(isStart?'출근 �
 }
 // ===== 숫자패드 끝 =====
 
-// ===== Firebase 알바생 데이터 받기 =====
-function showReceiveModal(){
-  const list=document.getElementById('fbPendingList');
-  const pending=window._pendingData||{};
-  const keys=Object.keys(pending);
-  if(keys.length>0){
-    list.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--good);margin-bottom:8px;">📬 받은 데이터 '+keys.length+'건</div>'+
-    keys.map(k=>{
-      const d=pending[k];
-      return `<div style="padding:10px;background:#e8f5e9;border-radius:8px;margin-bottom:8px;font-size:12px;">
-        <div style="font-weight:700;margin-bottom:4px;">${d.emp} · ${d.year}년 ${d.month}월 · ${d.records?d.records.length:0}건</div>
-        <div style="color:var(--mut);">총 ${d.records?d.records.reduce((s,r)=>s+r.hours,0).toFixed(2):0}h</div>
-        <button onclick="applyFbData('${k}')" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;">✅ 반영하기</button>
-      </div>`;
-    }).join('');
-  } else {
-    list.innerHTML='<div style="text-align:center;font-size:12px;color:var(--mut);padding:16px 0;">대기 중인 데이터가 없습니다</div>';
-  }
-  document.getElementById('receiveInput').value='';
-  document.getElementById('receiveModal').style.display='flex';
-}
-
-function applyFbData(key){
-  const pending=window._pendingData||{};
-  const payload=pending[key];
-  if(!payload)return;
-  applyPayload(payload);
-  // Firebase에서 해당 항목 삭제
-  if(window._fbDb&&window._fbRef&&window._fbRemove){
-    window._fbRemove(window._fbRef(window._fbDb,'alba_pending/'+key));
-  }
-  delete pending[key];
-  window._pendingData=pending;
-  const badge=document.getElementById('pendingBadge');
-  const remaining=Object.keys(pending).length;
-  if(badge){ badge.textContent=remaining; if(remaining===0)badge.style.display='none'; }
-  showReceiveModal(); // 목록 갱신
-}
-
-function applyPayload(payload){
-  if(!payload||!payload.emp||!payload.records)return;
-  const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
-  const dates=new Set(payload.records.map(r=>r.date));
-  const filtered=recs.filter(r=>!(r.emp===payload.emp&&dates.has(r.date)));
-  const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
-  const emp=emps.find(e=>e.name===payload.emp);
-  const newRecs=payload.records.map(r=>({
-    emp:payload.emp,date:r.date,start:r.start,end:r.end,hours:r.hours,
-    wage:emp?(emp.probation?Math.floor(emp.wage*0.9):emp.wage):0
-  }));
-  localStorage.setItem(ST.REC,JSON.stringify(filtered.concat(newRecs)));
-  closeModal('receiveModal');
-  loadPayroll();
-  showToast(`${payload.emp}님 데이터 ${newRecs.length}건 반영됐습니다`);
-}
-
-function applyReceiveData(){
-  const raw=document.getElementById('receiveInput').value.trim();
-  const jsonStr=raw.startsWith('[ALBA_DATA]')?raw.replace('[ALBA_DATA]',''):raw;
-  let payload;
-  try{ payload=JSON.parse(jsonStr); }
-  catch(e){ customAlert('오류','올바른 데이터 형식이 아닙니다'); return; }
-  if(payload.type!=='alba_work_data'){ customAlert('오류','알바생 데이터 형식이 아닙니다'); return; }
-  applyPayload(payload);
-}
-
 // PWA 서비스워커 등록
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('manager-sw.js').catch(()=>{});
 }
 
-console.log('🚀 알바관리 Pro — Firebase 연동');
+console.log('🚀 알바관리 Pro — Firebase 실시간 연동');
 </script>
 </body>
 </html>
