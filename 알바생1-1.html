@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>알바생 근무입력</title>
+<meta name="theme-color" content="#2e7d32">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="근무입력">
+<link rel="manifest" href="worker-manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, push, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+const firebaseConfig = {
+  apiKey: "AIzaSyAhKNC0bkWDruBBkZbWvRPAUWEhkndPI5M",
+  authDomain: "alba-pro.firebaseapp.com",
+  databaseURL: "https://alba-pro-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "alba-pro",
+  storageBucket: "alba-pro.firebasestorage.app",
+  messagingSenderId: "783277689187",
+  appId: "1:783277689187:web:df64da80d932e45586eb56"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+window._fbDb = db;
+window._fbRef = ref;
+window._fbPush = push;
+window._fbGet = get;
+// 사장앱 직원 목록 Firebase에서 로드
+get(ref(db, 'alba_employees')).then(snap => {
+  if(snap.exists()) {
+    window._fbEmps = Object.values(snap.val());
+    if(typeof loadEmpList === 'function') loadEmpList(window._fbEmps);
+  }
+}).catch(()=>{});
+window._fbReady = true;
+</script>
+<style>
+:root{--bg:#f0f7f0;--sur:#fff;--sur2:#e8f5e9;--bdr:#c8e6c9;--acc:#2e7d32;--warn:#f57c00;--bad:#c62828;--txt:#1a1a1a;--mut:#5f6368;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;}
+*{scrollbar-width:none;-ms-overflow-style:none;}*::-webkit-scrollbar{display:none;}
+.hdr{background:linear-gradient(180deg,#43a047 0%,#2e7d32 60%,#1b5e20 100%);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;box-shadow:0 3px 0 #0a2e0f,0 4px 8px rgba(0,0,0,.15);}
+.hdr h1{font-size:15px;font-weight:700;}
+.pg{padding:14px;padding-bottom:100px;}
+.card{background:#fff;border:1.5px solid var(--bdr);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 4px 0 #a5d6a7,0 5px 8px rgba(0,0,0,.08);}
+.card-title{font-size:13px;font-weight:700;margin-bottom:10px;}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px;border:none;font-weight:700;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.2);transition:transform .1s,box-shadow .1s;}
+.btn-sm:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.2);}
+.btn-sm-green{background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;}
+.btn-sm-warn{background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;}
+.btn-sm-red{background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px;}
+.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;border:1.5px solid var(--bdr);border-radius:8px;font-size:11px;cursor:pointer;box-shadow:0 2px 0 #a5d6a7;position:relative;transition:transform .1s;}
+.cal-cell:active{transform:translateY(1px);}
+.cal-cell.work{background:#e8f5e9;border-color:#2e7d32;}
+.cal-cell.today{background:#fff9c4;border-color:#fbc02d;}
+.cal-header{font-size:10px;font-weight:700;color:var(--mut);padding:8px;text-align:center;}
+.work-badge{position:absolute;top:2px;right:2px;background:#2e7d32;color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;}
+.modal-content{background:#fff;border-radius:16px;padding:18px 16px;max-width:360px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);animation:pop .3s cubic-bezier(.68,-.55,.265,1.55);}
+@keyframes pop{from{transform:scale(.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:12px;text-align:center;}
+.numpad-btn{height:42px;border-radius:10px;border:1.5px solid var(--bdr);background:#fff;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #a5d6a7;transition:transform .1s,box-shadow .1s;color:var(--txt);}
+.numpad-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #a5d6a7;}
+.work-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--sur2);border-radius:8px;margin-bottom:6px;font-size:12px;}
+.confirm-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center;}
+.confirm-box{background:#fff;border-radius:16px;padding:24px;max-width:300px;width:85%;}
+.confirm-title{font-size:16px;font-weight:700;margin-bottom:10px;text-align:center;}
+.confirm-message{font-size:13px;color:var(--mut);margin-bottom:18px;text-align:center;line-height:1.6;}
+.confirm-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.confirm-btn{padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;}
+.confirm-btn-cancel{background:var(--sur2);color:var(--txt);}
+.send-bar{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1.5px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:50;}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:2000;display:none;max-width:80%;text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr"><h1>📋 알바생 근무입력</h1></div>
+<div class="pg">
+<div class="card">
+  <div class="card-title">내 이름 선택</div>
+  <select id="empSelect" onchange="selectEmp()" style="width:100%;padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:14px;font-weight:700;background:#fff;">
+    <option value="">-- 이름을 선택하세요 --</option>
+  </select>
+  <div id="empInfo" style="margin-top:8px;font-size:12px;color:var(--mut);text-align:center;min-height:18px;"></div>
+  <div id="addNameWrap" style="margin-top:8px;display:none;">
+    <button onclick="addMyName()" style="width:100%;padding:9px;border-radius:8px;border:none;background:var(--sur2);color:var(--acc);font-weight:700;font-size:13px;cursor:pointer;">+ 내 이름 직접 추가</button>
+  </div>
+</div>
+<div class="card" id="calCard" style="display:none;">
+  <div style="display:flex;justify-content:center;align-items:center;margin-bottom:10px;">
+    <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px;">
+      <button class="btn-sm btn-sm-green" onclick="prevMonth()" style="padding:6px 10px;font-size:13px;">◀</button>
+      <span id="calTitle">2026년 5월</span>
+      <button class="btn-sm btn-sm-green" onclick="nextMonth()" style="padding:6px 10px;font-size:13px;">▶</button>
+    </div>
+  </div>
+  <div class="cal" id="calendar"></div>
+  <div style="margin-top:10px;font-size:11px;color:var(--mut);text-align:center;">날짜를 눌러 근무시간을 입력하세요</div>
+</div>
+<div class="card" id="summaryCard" style="display:none;">
+  <div class="card-title">이번 달 입력 현황</div>
+  <div id="summaryList"></div>
+</div>
+</div>
+
+<div class="send-bar">
+  <button id="sendBtn" onclick="sendToManager()" style="display:none;width:100%;padding:13px;border-radius:12px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;box-shadow:0 5px 0 #0a2e0f;">📤 사장앱으로 전송</button>
+  <div id="noEmpMsg" style="text-align:center;font-size:13px;color:var(--mut);padding:8px 0;">이름을 선택하면 근무입력이 시작됩니다</div>
+</div>
+
+<div class="modal" id="workModal">
+<div class="modal-content">
+  <div class="modal-title" id="workTitle">근무 입력</div>
+  <input type="hidden" id="workDate"/>
+  <input type="hidden" id="workIdx"/>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+    <div id="npStartBox" onclick="npSetActive('start')" style="text-align:center;padding:10px 6px;background:#e3f2fd;border:2.5px solid #1a73e8;border-radius:10px;cursor:pointer;">
+      <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:3px;">출근</div>
+      <div id="npStartText" style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#1a73e8;letter-spacing:2px;">09:00</div>
+    </div>
+    <div id="npEndBox" onclick="npSetActive('end')" style="text-align:center;padding:10px 6px;background:#fff;border:2.5px solid var(--bdr);border-radius:10px;cursor:pointer;">
+      <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:3px;">퇴근</div>
+      <div id="npEndText" style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--txt);letter-spacing:2px;">18:00</div>
+    </div>
+  </div>
+  <div style="text-align:center;height:22px;margin-bottom:6px;">
+    <span id="npBuffer" style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;color:var(--warn);letter-spacing:4px;"></span>
+    <span id="npHint" style="font-size:11px;color:var(--mut);"></span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:210px;margin:0 auto 10px auto;">
+    <button class="numpad-btn" onclick="npPress(1)">1</button>
+    <button class="numpad-btn" onclick="npPress(2)">2</button>
+    <button class="numpad-btn" onclick="npPress(3)">3</button>
+    <button class="numpad-btn" onclick="npPress(4)">4</button>
+    <button class="numpad-btn" onclick="npPress(5)">5</button>
+    <button class="numpad-btn" onclick="npPress(6)">6</button>
+    <button class="numpad-btn" onclick="npPress(7)">7</button>
+    <button class="numpad-btn" onclick="npPress(8)">8</button>
+    <button class="numpad-btn" onclick="npPress(9)">9</button>
+    <button class="numpad-btn" style="background:#fff3e0;color:var(--warn);font-size:12px;" onclick="npClear()">C</button>
+    <button class="numpad-btn" onclick="npPress(0)">0</button>
+    <button class="numpad-btn" style="background:#fce4ec;color:var(--bad);font-size:14px;" onclick="npDel()">⌫</button>
+  </div>
+  <div id="existingWorks" style="margin-top:6px;"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+    <button style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;box-shadow:0 3px 0 #0a2e0f;" onclick="saveWork()">저장</button>
+    <button style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);" onclick="closeModal('workModal')">취소</button>
+  </div>
+</div>
+</div>
+
+<div class="modal" id="sendModal">
+<div class="modal-content">
+  <div id="sendResult" style="text-align:center;padding:10px 0;font-size:14px;line-height:1.8;"></div>
+  <button style="width:100%;margin-top:12px;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);" onclick="closeModal('sendModal')">닫기</button>
+</div>
+</div>
+
+<div class="confirm-modal" id="confirmModal">
+<div class="confirm-box">
+  <div class="confirm-title" id="confirmTitle">확인</div>
+  <div class="confirm-message" id="confirmMessage"></div>
+  <div class="confirm-buttons" id="confirmButtons"></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY='alba_worker_recs';
+let curEmp=null,curDate=new Date(),curWorkDate='';
+let empList=[];
+
+window.onload=()=>{
+  const now=new Date();
+  curDate=new Date(now.getFullYear(),now.getMonth(),1);
+  setTimeout(()=>{
+    if(!window._fbEmps){
+      const saved=localStorage.getItem('alba_emp');
+      if(saved) loadEmpList(JSON.parse(saved));
+      else { loadEmpList([]); document.getElementById('addNameWrap').style.display='block'; }
+    } else { loadEmpList(window._fbEmps); }
+  },2000);
+  renderCal();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('worker-sw.js').catch(()=>{});
+};
+
+function loadEmpList(emps){
+  empList=emps;
+  const s=document.getElementById('empSelect');
+  s.innerHTML='<option value="">-- 이름을 선택하세요 --</option>';
+  emps.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.name;s.appendChild(o);});
+  if(!emps.length) document.getElementById('addNameWrap').style.display='block';
+}
+
+function addMyName(){
+  const name=prompt('이름을 입력하세요');
+  if(!name||!name.trim())return;
+  const list=JSON.parse(localStorage.getItem('worker_names')||'[]');
+  list.push(name.trim());
+  localStorage.setItem('worker_names',JSON.stringify(list));
+  loadEmpList(empList.concat([{name:name.trim()}]));
+  showToast(name+'님 추가됐습니다');
+}
+
+function selectEmp(){
+  const val=document.getElementById('empSelect').value;
+  if(!val){curEmp=null;document.getElementById('calCard').style.display='none';document.getElementById('summaryCard').style.display='none';document.getElementById('sendBtn').style.display='none';document.getElementById('noEmpMsg').style.display='block';document.getElementById('empInfo').textContent='';return;}
+  curEmp=empList[parseInt(val)];
+  document.getElementById('empInfo').textContent=curEmp.name+'님의 근무를 입력합니다';
+  document.getElementById('calCard').style.display='block';
+  document.getElementById('summaryCard').style.display='block';
+  document.getElementById('sendBtn').style.display='block';
+  document.getElementById('noEmpMsg').style.display='none';
+  renderCal();renderSummary();
+}
+
+function prevMonth(){curDate.setMonth(curDate.getMonth()-1);renderCal();renderSummary();}
+function nextMonth(){curDate.setMonth(curDate.getMonth()+1);renderCal();renderSummary();}
+function getRecs(){return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}
+function saveRecs(r){localStorage.setItem(STORAGE_KEY,JSON.stringify(r));}
+
+function renderCal(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  document.getElementById('calTitle').textContent=`${y}년 ${m+1}월`;
+  const first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate();
+  const recs=getRecs();
+  let html='';
+  ['일','월','화','수','목','금','토'].forEach((d,i)=>html+=`<div class="cal-header" style="${i===0?'color:#ef5350':i===6?'color:#1976d2':''}">${d}</div>`);
+  for(let i=0;i<first;i++)html+='<div></div>';
+  const today=new Date();today.setHours(0,0,0,0);
+  for(let d=1;d<=last;d++){
+    const date=new Date(y,m,d);date.setHours(0,0,0,0);
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const works=curEmp?recs.filter(r=>r.emp===curEmp.name&&r.date===ds):[];
+    let cls='cal-cell';
+    if(date.getTime()===today.getTime())cls+=' today';
+    if(works.length)cls+=' work';
+    const badge=works.length>1?`<span class="work-badge">${works.length}</span>`:'';
+    const oc=curEmp?`onclick="openWork('${ds}')"`:' ';
+    html+=`<div class="${cls}" ${oc}><div style="font-weight:700;font-size:12px;">${d}</div>${works.length?`<div style="font-size:9px;color:#2e7d32;font-weight:700;">${works.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>`:''} ${badge}</div>`;
+  }
+  document.getElementById('calendar').innerHTML=html;
+}
+
+function renderSummary(){
+  if(!curEmp)return;
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
+  const c=document.getElementById('summaryList');
+  if(!recs.length){c.innerHTML='<div style="text-align:center;color:var(--mut);font-size:12px;padding:10px 0;">입력된 근무가 없습니다</div>';return;}
+  const totalH=recs.reduce((s,w)=>s+w.hours,0);
+  c.innerHTML=recs.map(r=>`<div class="work-item"><div><strong>${r.date}</strong> ${r.start}~${r.end}</div><div style="font-weight:700;color:#2e7d32;">${r.hours.toFixed(2)}h</div></div>`).join('')+
+  `<div style="display:flex;justify-content:space-between;padding:10px;background:#e8f5e9;border-radius:8px;margin-top:6px;font-weight:700;"><span>총 근무시간</span><span style="color:#2e7d32;">${totalH.toFixed(2)}h</span></div>`;
+}
+
+let npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+function npSetActive(w){npState.active=w;npState.buf='';npRender();}
+function npPress(n){
+  if(npState.buf.length>=4)return;
+  npState.buf+=String(n);
+  if(npState.buf.length===4){
+    const h=parseInt(npState.buf.substring(0,2)),m=parseInt(npState.buf.substring(2,4));
+    if(h>23||m>59){showToast('올바른 시간이 아닙니다');npState.buf='';}
+    else{if(npState.active==='start'){npState.startVal=npState.buf;npState.active='end';}else{npState.endVal=npState.buf;npState.active='start';}npState.buf='';}
+  }
+  npRender();
+}
+function npDel(){npState.buf=npState.buf.slice(0,-1);npRender();}
+function npClear(){npState.buf='';npRender();}
+function npFmt(v){const s=v.padStart(4,'0');return s.substring(0,2)+':'+s.substring(2,4);}
+function npRender(){
+  document.getElementById('npStartText').textContent=npFmt(npState.startVal);
+  document.getElementById('npEndText').textContent=npFmt(npState.endVal);
+  const isStart=npState.active==='start';
+  const sb=document.getElementById('npStartBox'),eb=document.getElementById('npEndBox');
+  sb.style.background=isStart?'#e3f2fd':'#fff';sb.style.borderColor=isStart?'#1a73e8':'var(--bdr)';
+  document.getElementById('npStartText').style.color=isStart?'#1a73e8':'var(--txt)';
+  eb.style.background=!isStart?'#fff3e0':'#fff';eb.style.borderColor=!isStart?'#f57c00':'var(--bdr)';
+  document.getElementById('npEndText').style.color=!isStart?'#f57c00':'var(--txt)';
+  const buf=npState.buf;
+  const hPart=buf.length>=1?buf.substring(0,Math.min(2,buf.length)).padEnd(2,'_'):'__';
+  const mPart=buf.length>=3?buf.substring(2,4).padEnd(2,'_'):'__';
+  document.getElementById('npBuffer').textContent=buf.length>0?hPart+':'+mPart:'';
+  document.getElementById('npHint').textContent=buf.length===0?(isStart?'출근 시간을 입력하세요':'퇴근 시간을 입력하세요'):'';
+}
+
+function openWork(ds){
+  if(!curEmp)return;
+  curWorkDate=ds;
+  document.getElementById('workTitle').textContent=`${ds} 근무입력`;
+  document.getElementById('workDate').value=ds;
+  document.getElementById('workIdx').value='';
+  const defS=curEmp.startTime?curEmp.startTime.replace(':',''):'0900';
+  const defE=curEmp.endTime?curEmp.endTime.replace(':',''):'1800';
+  npState={active:'start',startVal:defS,endVal:defE,buf:''};
+  npRender();loadExisting(ds);
+  document.getElementById('workModal').style.display='flex';
+}
+
+function loadExisting(ds){
+  const allRecs=getRecs();
+  const recs=allRecs.filter(r=>r.emp===curEmp.name&&r.date===ds);
+  const c=document.getElementById('existingWorks');
+  if(!recs.length){c.innerHTML='';return;}
+  c.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:6px;">등록된 근무</div>'+
+  recs.map(w=>`<div class="work-item"><div><strong>${w.start}~${w.end}</strong> (${w.hours.toFixed(2)}h)</div><div style="display:flex;gap:4px;"><button class="btn-sm btn-sm-warn" style="font-size:11px;padding:4px 8px;" onclick="editWork(${allRecs.indexOf(w)})">수정</button><button class="btn-sm btn-sm-red" style="font-size:11px;padding:4px 8px;" onclick="deleteWork(${allRecs.indexOf(w)})">삭제</button></div></div>`).join('');
+}
+
+function editWork(idx){const w=getRecs()[idx];document.getElementById('workIdx').value=idx;npState.startVal=w.start.replace(':','');npState.endVal=w.end.replace(':','');npState.buf='';npRender();}
+
+function deleteWork(idx){
+  customConfirm('근무 삭제','이 근무를 삭제할까요?',()=>{
+    const recs=getRecs();recs.splice(idx,1);saveRecs(recs);
+    loadExisting(curWorkDate);renderCal();renderSummary();showToast('삭제됐습니다');
+  });
+}
+
+function saveWork(){
+  const ds=document.getElementById('workDate').value;
+  const idx=document.getElementById('workIdx').value;
+  const sv=npState.startVal.padStart(4,'0'),ev=npState.endVal.padStart(4,'0');
+  const sh=parseInt(sv.substring(0,2)),sm=parseInt(sv.substring(2,4));
+  const eh=parseInt(ev.substring(0,2)),em2=parseInt(ev.substring(2,4));
+  if(sh>23||sm>59||eh>23||em2>59)return customAlert('입력 오류','올바른 시간을 입력하세요');
+  const start=`${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`;
+  const end=`${String(eh).padStart(2,'0')}:${String(em2).padStart(2,'0')}`;
+  let mins=(eh*60+em2)-(sh*60+sm);
+  if(mins<=0)mins+=1440;
+  if(mins<=0)return customAlert('입력 오류','올바른 시간을 입력하세요');
+  const hours=mins/60;
+  const recs=getRecs();
+  if(idx===''){recs.push({emp:curEmp.name,date:ds,start,end,hours});showToast('근무가 등록됐습니다');}
+  else{recs[idx]={emp:curEmp.name,date:ds,start,end,hours};showToast('근무가 수정됐습니다');}
+  saveRecs(recs);closeModal('workModal');renderCal();renderSummary();
+}
+
+function sendToManager(){
+  if(!curEmp){showToast('이름을 먼저 선택하세요');return;}
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  const recs=getRecs().filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
+  if(!recs.length){showToast('전송할 근무 데이터가 없습니다');return;}
+  const payload={type:'alba_work_data',emp:curEmp.name,year:y,month:m+1,records:recs,sentAt:new Date().toISOString()};
+  const resultEl=document.getElementById('sendResult');
+  resultEl.innerHTML='<div style="font-size:30px;margin-bottom:10px;">⏳</div>전송 중...';
+  document.getElementById('sendModal').style.display='flex';
+  if(window._fbDb&&window._fbPush&&window._fbRef){
+    window._fbPush(window._fbRef(window._fbDb,'alba_pending'),payload)
+      .then(()=>{
+        resultEl.innerHTML=`<div style="font-size:42px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:8px;">전송 완료!</div>
+        <div style="font-size:13px;color:var(--mut);">${curEmp.name}님 · ${y}년 ${m+1}월<br>${recs.length}건 · 총 ${recs.reduce((s,w)=>s+w.hours,0).toFixed(2)}h</div>
+        <div style="margin-top:12px;font-size:12px;color:#2e7d32;font-weight:700;">📲 사장앱에 자동으로 전달됩니다</div>`;
+      })
+      .catch(()=>fallbackSend(payload,resultEl));
+  } else { fallbackSend(payload,resultEl); }
+}
+
+function fallbackSend(payload,resultEl){
+  const text='[ALBA_DATA]'+JSON.stringify(payload);
+  if(navigator.share){
+    navigator.share({title:'근무데이터',text:text})
+      .then(()=>{resultEl.innerHTML='<div style="font-size:42px;margin-bottom:10px;">✅</div><div style="font-weight:700;">전송됐습니다</div>';})
+      .catch(()=>copyText(text,resultEl));
+  } else { copyText(text,resultEl); }
+}
+
+function copyText(text,resultEl){
+  const done=()=>{resultEl.innerHTML='<div style="font-size:36px;margin-bottom:10px;">📋</div><div style="font-weight:700;font-size:14px;margin-bottom:8px;">클립보드에 복사됐습니다</div><div style="font-size:12px;color:var(--mut);">카카오톡·문자로 사장님께 붙여넣기로 보내주세요</div>';};
+  if(navigator.clipboard){navigator.clipboard.writeText(text).then(done).catch(done);}
+  else{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();}
+}
+
+function closeModal(id){document.getElementById(id).style.display='none';}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+let confirmCallback=null;
+function customConfirm(title,msg,cb){document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMessage').textContent=msg;document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn confirm-btn-cancel" onclick="confirmNo()">취소</button><button class="confirm-btn" style="background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;" onclick="confirmYes()">확인</button>';confirmCallback=cb;document.getElementById('confirmModal').style.display='flex';}
+function customAlert(title,msg){document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMessage').textContent=msg;document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn" style="background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;grid-column:span 2;" onclick="confirmNo()">확인</button>';confirmCallback=null;document.getElementById('confirmModal').style.display='flex';}
+function confirmYes(){document.getElementById('confirmModal').style.display='none';if(confirmCallback)confirmCallback();confirmCallback=null;}
+function confirmNo(){document.getElementById('confirmModal').style.display='none';confirmCallback=null;}
+console.log('✅ 알바생1');
+</script>
+</body>
+</html>
