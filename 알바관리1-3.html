@@ -818,7 +818,29 @@ function loadEmp(){
 const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
 const c=document.getElementById('employeeList');
 if(!emps.length){c.innerHTML='<p style="text-align:center;color:var(--mut);padding:20px 0;font-size:12px;">등록된 직원이 없습니다</p>';return;}
-c.innerHTML=emps.map((e,i)=>`<div class="list-item"><div><div style="font-size:14px;font-weight:700;margin-bottom:4px;">${e.name}</div><div style="font-size:11px;color:var(--mut);">${e.wp} / 시급 ${(e.probation?Math.floor(e.wage*0.9):e.wage).toLocaleString()}원</div></div><div style="display:flex;gap:6px;"><button class="btn-sm btn-sm-blue" onclick="editEmp(${i})">수정</button><button class="btn-sm btn-sm-red" onclick="delEmp(${i})">삭제</button></div></div>`).join('');
+c.innerHTML=emps.map((e,i)=>{
+const code=genEmpCode(e.name,e.wp||'');
+return`<div class="list-item"><div><div style="font-size:14px;font-weight:700;margin-bottom:2px;">${e.name}</div><div style="font-size:11px;color:var(--mut);">${e.wp} / 시급 ${(e.probation?Math.floor(e.wage*0.9):e.wage).toLocaleString()}원</div></div><div style="display:flex;gap:6px;"><button class="btn-sm btn-sm-blue" onclick="editEmp(${i})">수정</button><button class="btn-sm btn-sm-red" onclick="delEmp(${i})">삭제</button><button class="btn-sm" style="background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;font-size:11px;" onclick="unlockWorker('${e.name}','${code}')">해제</button></div></div>`;
+}).join('');
+}
+
+// 직원 코드 생성 (알바생앱과 동일한 방식)
+function genEmpCode(name,wp){
+let hash=0;const str=name+wp;
+for(let i=0;i<str.length;i++)hash=((hash<<5)-hash)+str.charCodeAt(i);
+return Math.abs(hash).toString(36).toUpperCase().substring(0,4).padEnd(4,'0');
+}
+
+// 알바생앱 잠금 해제
+function unlockWorker(name,code){
+customConfirm('잠금 해제',`${name}님의 알바생앱 이름 선택을 초기화합니까?`,()=>{
+if(!window._fbDb||!window._fbRef||!window._fbPush){
+customAlert('오류','Firebase 연결이 필요합니다');return;
+}
+window._fbPush(window._fbRef(window._fbDb,'alba_unlock'),{code,name,at:new Date().toISOString()})
+.then(()=>showToast(`${name}님 알바생앱 잠금이 해제됩니다`))
+.catch(()=>customAlert('오류','잠금 해제 전송 실패'));
+});
 }
 
 function showEmployeeModal(){
@@ -883,6 +905,8 @@ const emp={name,wp,wage,probation,phone,address,account,startTime,endTime};
 if(idx==='')emps.push(emp);
 else emps[idx]=emp;
 localStorage.setItem(ST.EMP,JSON.stringify(emps));
+// Firebase에 직원 목록 동기화 (알바생앱에서 이름 선택용)
+syncEmpsToFirebase(emps);
 closeModal('empModal');
 loadEmp();
 loadEmpSelect();
@@ -894,9 +918,17 @@ customConfirm('직원 삭제','정말 삭제하시겠습니까?',()=>{
 const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
 emps.splice(i,1);
 localStorage.setItem(ST.EMP,JSON.stringify(emps));
+syncEmpsToFirebase(emps);
 loadEmp();
 showToast('직원이 삭제되었습니다');
 });
+}
+
+// 알바생앱용 직원 목록 Firebase 동기화
+function syncEmpsToFirebase(emps){
+if(!window._fbDb||!window._fbRef||!window._fbSet)return;
+const simplified=emps.map(e=>({name:e.name,wp:e.wp||'',startTime:e.startTime||'09:00',endTime:e.endTime||'18:00'}));
+window._fbSet(window._fbRef(window._fbDb,'alba_employees'),simplified).catch(()=>{});
 }
 
 function renderIns(){
