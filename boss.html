@@ -88,8 +88,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 .tdot.on{background:var(--acc);width:20px;border-radius:3px;}
 .tab-label{font-size:12px;font-weight:700;color:var(--acc);margin-left:4px;}
 .sw{overflow:hidden;touch-action:pan-y;height:calc(100vh - 100px);}
-.sl{display:flex;transition:transform .35s cubic-bezier(.4,0,.2,1);height:100%;}
-.pg{min-width:100%;padding:14px;padding-bottom:160px;max-width:100%;overflow-y:auto;}
+.sl{display:flex;transition:transform .35s cubic-bezier(.4,0,.2,1);height:100%;width:500%;}
+.pg{min-width:20%;width:20%;padding:14px;padding-bottom:160px;max-width:20%;overflow-y:auto;height:100%;box-sizing:border-box;}
 .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;padding:13px;border-radius:12px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:transform .1s,box-shadow .1s;user-select:none;}
 .btn-blue{background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 60%,#1557b0 100%);color:#fff;box-shadow:0 5px 0 #0d3c7a,0 6px 8px rgba(0,0,0,.25);}
 .btn-blue:active{transform:translateY(4px);box-shadow:0 1px 0 #0d3c7a,0 2px 4px rgba(0,0,0,.2);}
@@ -166,88 +166,126 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 <div class="hdate">v1</div>
 </div>
 <div class="tdots">
-<div class="tdot on" onclick="goTab(0)"></div><span class="tab-label">기본설정</span>
-<div class="tdot" onclick="goTab(1)"></div><span class="tab-label">직원관리</span>
-<div class="tdot" onclick="goTab(2)"></div><span class="tab-label">급여계산</span>
-<div class="tdot" onclick="goTab(3)"></div><span class="tab-label">급여대장</span>
-<div class="tdot" onclick="showHelp()"></div><span class="tab-label">도움말</span>
+<div class="tdot on" onclick="goTab(0)"></div><span class="tab-label" onclick="goTab(0)" style="cursor:pointer;">설정/조회</span>
+<div class="tdot" onclick="goTab(1)"></div><span class="tab-label" onclick="goTab(1)" style="cursor:pointer;">직원관리</span>
+<div class="tdot" onclick="goTab(2)"></div><span class="tab-label" onclick="goTab(2)" style="cursor:pointer;">급여계산</span>
+<div class="tdot" onclick="goTab(3)"></div><span class="tab-label" onclick="goTab(3)" style="cursor:pointer;">급여대장</span>
+<div class="tdot" onclick="goTab(4)"></div><span class="tab-label" onclick="goTab(4)" style="cursor:pointer;">도움말</span>
 </div>
 <div class="sw" id="swiper">
 <div class="sl" id="slider">
 <div class="pg" style="padding-bottom:80px;">
-<div class="card" style="padding:12px;">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-  <div class="card-title" style="margin-bottom:0;">근무처 관리</div>
-  <button onclick="showWorkplaceModal()" style="padding:6px 12px;border-radius:8px;border:none;background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #0d3c7a;white-space:nowrap;">+ 추가</button>
+
+<!-- 탭명 변경: 설정/조회 -->
+
+<!-- ① 보관자료 섹션 -->
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="font-size:14px;font-weight:700;color:var(--txt);">📁 보관자료</div>
+    <button onclick="showDocUpload()" style="padding:6px 12px;border-radius:8px;border:none;background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #0a2e0f;">+ 추가</button>
+  </div>
+  <!-- 구분 탭 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+    <button id="docTabBoss" onclick="switchDocTab('boss')" style="padding:8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;box-shadow:0 3px 0 #0d3c7a;">🏢 사장 자료</button>
+    <button id="docTabEmp" onclick="switchDocTab('emp')" style="padding:8px;border-radius:8px;border:2px solid var(--bdr);font-size:12px;font-weight:700;cursor:pointer;background:#fff;color:var(--mut);">👤 직원 자료</button>
+  </div>
+  <!-- 직원 선택 (직원탭일때만 표시) -->
+  <div id="docEmpSelectWrap" style="display:none;margin-bottom:8px;">
+    <select id="docEmpSelect" onchange="loadDocList()" style="width:100%;padding:8px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;font-weight:700;">
+      <option value="">직원 선택</option>
+    </select>
+  </div>
+  <!-- 검색 -->
+  <div style="display:flex;gap:6px;margin-bottom:10px;">
+    <input id="docSearch" type="text" placeholder="파일명 검색" oninput="loadDocList()"
+      style="flex:1;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:12px;"/>
+    <div style="display:flex;align-items:center;justify-content:center;padding:0 8px;background:var(--sur2);border-radius:8px;font-size:10px;color:var(--mut);border:1.5px solid var(--bdr);">
+      <span id="docCount">0</span>건
+    </div>
+  </div>
+  <!-- 파일 목록 -->
+  <div id="docList" style="min-height:80px;max-height:200px;overflow-y:auto;"></div>
 </div>
-<div id="workplaceList" style="min-height:120px;max-height:240px;overflow-y:auto;"></div>
+
+<!-- ② 근무처 관리 -->
+<div class="card" style="padding:12px;margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <div style="font-size:13px;font-weight:700;color:var(--txt);">🏪 근무처 관리</div>
+    <button onclick="showWorkplaceModal()" style="padding:6px 12px;border-radius:8px;border:none;background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #0d3c7a;white-space:nowrap;">+ 추가</button>
+  </div>
+  <div id="workplaceList" style="min-height:60px;max-height:180px;overflow-y:auto;"></div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-<div class="card" style="padding:10px;">
-<div class="card-title" style="font-size:11px;margin-bottom:8px;">급여 기준 설정</div>
-<div class="form-field" style="margin-bottom:6px;">
-<label style="font-size:9px;margin-bottom:2px;">법정시급</label>
-<input type="number" id="minWage" value="10030" style="padding:6px;font-size:11px;"/>
+
+<!-- ③ 급여기준 + 4대보험 -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--acc);margin-bottom:8px;">💰 급여 기준</div>
+    <div class="form-field" style="margin-bottom:6px;">
+      <label style="font-size:9px;margin-bottom:2px;">법정시급</label>
+      <input type="number" id="minWage" value="10030" style="padding:6px;font-size:11px;"/>
+    </div>
+    <div class="form-field" style="margin-bottom:6px;">
+      <label style="font-size:9px;margin-bottom:2px;">주휴기준 (시간)</label>
+      <input type="number" id="weeklyThreshold" value="15" style="padding:6px;font-size:11px;"/>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10px;">
+      <input type="checkbox" id="weeklyAllowanceEnabled" checked style="width:14px;height:14px;">
+      <span>주휴수당 자동계산</span>
+    </label>
+  </div>
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px;">🛡️ 4대보험</div>
+    <div id="insuranceGrid"></div>
+  </div>
 </div>
-<div class="form-field" style="margin-bottom:6px;">
-<label style="font-size:9px;margin-bottom:2px;">주휴기준 (시간)</label>
-<input type="number" id="weeklyThreshold" value="15" style="padding:6px;font-size:11px;"/>
+
+<!-- ④ 주휴요일 + 보안 -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;">📅 주휴 계산 요일</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+      <div class="form-field" style="margin-bottom:0;">
+        <label style="font-size:9px;margin-bottom:2px;">시작</label>
+        <select id="weekStartDay" style="padding:5px;font-size:10px;">
+          <option value="0">일요일</option>
+          <option value="1" selected>월요일</option>
+          <option value="2">화요일</option>
+          <option value="3">수요일</option>
+          <option value="4">목요일</option>
+          <option value="5">금요일</option>
+          <option value="6">토요일</option>
+        </select>
+      </div>
+      <div class="form-field" style="margin-bottom:0;">
+        <label style="font-size:9px;margin-bottom:2px;">종료</label>
+        <select id="weekEndDay" style="padding:5px;font-size:10px;">
+          <option value="0" selected>일요일</option>
+          <option value="1">월요일</option>
+          <option value="2">화요일</option>
+          <option value="3">수요일</option>
+          <option value="4">목요일</option>
+          <option value="5">금요일</option>
+          <option value="6">토요일</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:8px;padding:6px;background:var(--sur2);border-radius:6px;font-size:9px;color:var(--mut);line-height:1.5;">
+      💡 주 15시간 이상 시 자동계산
+    </div>
+  </div>
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;">🔐 보안 설정</div>
+    <label style="display:flex;align-items:center;justify-content:space-between;padding:7px;background:var(--sur2);border-radius:8px;margin-bottom:6px;cursor:pointer;">
+      <span style="font-size:11px;font-weight:600;">비밀번호 사용</span>
+      <input type="checkbox" id="usePinLock" onchange="togglePinLock()" style="width:16px;height:16px;cursor:pointer;">
+    </label>
+    <button class="btn btn-blue" onclick="changePin()" id="changePinBtn" style="padding:6px;font-size:11px;display:none;">비밀번호 변경</button>
+    <div style="margin-top:6px;padding:6px;background:var(--sur2);border-radius:6px;font-size:9px;color:var(--mut);line-height:1.5;">
+      💡 앱 실행 시 4자리 입력
+    </div>
+  </div>
 </div>
-<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:10px;">
-<input type="checkbox" id="weeklyAllowanceEnabled" checked style="width:14px;height:14px;">
-<span>주휴수당 자동계산</span>
-</label>
-</div>
-<div class="card" style="padding:10px;">
-<div class="card-title" style="font-size:11px;margin-bottom:8px;">4대보험 설정</div>
-<div id="insuranceGrid"></div>
-</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-<div class="card" style="padding:12px;">
-<div class="card-title" style="font-size:11px;margin-bottom:10px;">주휴수당 계산 요일</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-<div class="form-field" style="margin-bottom:0;">
-<label style="font-size:9px;margin-bottom:2px;">시작요일</label>
-<select id="weekStartDay" style="padding:6px;font-size:11px;">
-<option value="0">일요일</option>
-<option value="1" selected>월요일</option>
-<option value="2">화요일</option>
-<option value="3">수요일</option>
-<option value="4">목요일</option>
-<option value="5">금요일</option>
-<option value="6">토요일</option>
-</select>
-</div>
-<div class="form-field" style="margin-bottom:0;">
-<label style="font-size:9px;margin-bottom:2px;">종료요일</label>
-<select id="weekEndDay" style="padding:6px;font-size:11px;">
-<option value="0" selected>일요일</option>
-<option value="1">월요일</option>
-<option value="2">화요일</option>
-<option value="3">수요일</option>
-<option value="4">목요일</option>
-<option value="5">금요일</option>
-<option value="6">토요일</option>
-</select>
-</div>
-</div>
-<div style="margin-top:12px;padding:8px;background:var(--sur2);border-radius:8px;font-size:10px;color:var(--mut);line-height:1.6;">
-  💡 주휴수당은 주 15시간 이상 근무 시 자동 계산됩니다.
-</div>
-</div>
-<div class="card" style="padding:12px;">
-<div class="card-title" style="font-size:11px;margin-bottom:10px;">보안 설정</div>
-<label style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:var(--sur2);border-radius:8px;margin-bottom:8px;cursor:pointer;">
-<span style="font-size:12px;font-weight:600;">비밀번호 사용</span>
-<input type="checkbox" id="usePinLock" onchange="togglePinLock()" style="width:18px;height:18px;cursor:pointer;">
-</label>
-<button class="btn btn-blue" onclick="changePin()" id="changePinBtn" style="padding:8px;font-size:12px;display:none;">비밀번호 변경</button>
-<div style="margin-top:8px;padding:8px;background:var(--sur2);border-radius:8px;font-size:10px;color:var(--mut);line-height:1.6;">
-  💡 비밀번호를 설정하면 앱 실행 시 4자리 번호를 입력해야 합니다.
-</div>
-</div>
-</div>
+
 </div>
 <div id="settingSaveBar" style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1.5px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:50;display:none;">
   <button class="btn btn-green" onclick="saveSettings()">설정 저장</button>
@@ -343,6 +381,77 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 <div id="payrollTable"></div>
 </div>
 </div>
+
+<!-- 도움말 탭 (goTab 4) -->
+<div class="pg" style="padding-bottom:80px;">
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📱 설정/조회 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    <b>📁 보관자료</b><br>
+    · 사장 자료 / 직원 자료 탭으로 구분<br>
+    · + 추가 버튼으로 이미지 업로드<br>
+    · 파일명 검색 가능<br>
+    · 법적 증거자료로 활용 가능<br><br>
+    <b>🏪 근무처 관리</b><br>
+    · + 추가로 근무처(매장) 등록<br>
+    · 여러 매장 운영 시 각각 등록<br><br>
+    <b>💰 급여 기준</b><br>
+    · 법정시급: 2026년 기준 10,030원<br>
+    · 주휴기준: 주 15시간 이상 시 주휴수당 발생<br><br>
+    <b>🛡️ 4대보험</b><br>
+    · 필요한 항목만 체크 후 설정 저장<br><br>
+    <b>🔐 보안 설정</b><br>
+    · 비밀번호 사용 체크 시 4자리 PIN 설정
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">👤 직원관리 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · + 직원 추가로 직원 등록<br>
+    · 이름, 근무처, 시급, 수습여부 입력<br>
+    · 전화번호 입력 시 알바앱에서 자동 인식<br>
+    · 알바앱 비밀번호 4자리 설정 가능<br>
+    · 기본 출퇴근 시간 설정 (캘린더 기본값)<br>
+    · 수정/삭제/해제 버튼으로 직원 관리
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📅 급여계산 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 직원 선택 후 캘린더에서 날짜 클릭<br>
+    · 숫자패드로 출퇴근 시간 입력<br>
+    · 출근 시간 4자리 입력 → 퇴근 자동 이동<br>
+    · 근무 있는 날짜는 파란색 표시<br>
+    · <b>선택삭제</b>: 여러 날짜 한번에 삭제<br>
+    · 급여 요약에서 실지급 급여 자동 계산<br>
+    · 수습 체크 시 시급 90% 적용
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📊 급여대장 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 전직원 급여 한눈에 확인<br>
+    · 년/월 선택으로 과거 급여 조회<br>
+    · 직원 이름 클릭 시 급여명세서 확인<br>
+    · 이미지 저장 / 문자 전송 가능<br>
+    · 전직원 지급 총액 자동 계산
+  </div>
+</div>
+<div class="card" style="padding:14px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">💾 데이터 관리</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 데이터는 내 기기에 저장됩니다<br>
+    · 브라우저 데이터 삭제 시 모든 정보 삭제<br>
+    · <b style="color:var(--bad);">중요: 정기적으로 급여대장 엑셀 백업 권장</b><br><br>
+    <b>📲 앱 설치 방법</b><br>
+    · Chrome에서 페이지 열기<br>
+    · 우측 상단 ⋮ 메뉴 클릭<br>
+    · "홈 화면에 추가" 선택<br>
+    · 홈화면 아이콘으로 실행 시 주소창 없이 앱처럼 사용
+  </div>
+</div>
+</div>
+
 </div>
 </div>
 
@@ -716,7 +825,7 @@ document.getElementById('lockScreen').style.display='flex';
 }
 
 
-function goTab(n){curTab=n;document.getElementById('slider').style.transform=`translateX(-${n*100}%)`;document.querySelectorAll('.tdot').forEach((d,i)=>d.classList.toggle('on',i===n));if(n===2){loadEmpSelect();renderCal();}if(n===3)loadPayroll();const saveBar=document.getElementById('settingSaveBar');if(saveBar)saveBar.style.display=n===0?'block':'none';}
+function goTab(n){curTab=n;document.getElementById('slider').style.transform=`translateX(-${n*20}%)`;document.querySelectorAll('.tdot').forEach((d,i)=>d.classList.toggle('on',i===n));if(n===2){loadEmpSelect();renderCal();}if(n===3)loadPayroll();if(n===0){loadDocEmpSelect();}const saveBar=document.getElementById('settingSaveBar');if(saveBar)saveBar.style.display=n===0?'block':'none';}
 
 let startX=0,curX=0,dragging=false,startY=0,curY=0,isDragged=false;
 const sw=document.getElementById('swiper'),sl=document.getElementById('slider');
@@ -748,8 +857,8 @@ if(diffX>20){
 isDragged=true;
 e.preventDefault();
 const diff=curX-startX;
-const base=-curTab*100;
-const pct=(diff/window.innerWidth)*100;
+const base=-curTab*20;
+const pct=(diff/window.innerWidth)*20;
 sl.style.transition='none';
 sl.style.transform=`translateX(${base+pct}%)`;
 }
@@ -764,10 +873,10 @@ const diff=curX-startX;
 sl.style.transition='transform .35s cubic-bezier(0.4,0,0.2,1)';
 if(diff>50&&curTab>0){
 goTab(curTab-1);
-}else if(diff<-50&&curTab<3){
+}else if(diff<-50&&curTab<4){
 goTab(curTab+1);
 }else{
-sl.style.transform=`translateX(-${curTab*100}%)`;
+sl.style.transform=`translateX(-${curTab*20}%)`;
 }
 },{passive:true});
 
@@ -807,6 +916,7 @@ document.getElementById('payYear').value=now.getFullYear();
 document.getElementById('payMonth').value=now.getMonth()+1;
 checkLock();loadWp();loadEmp();renderIns();loadEmpSelect();renderCal();loadPayroll();loadPinSettings();
 const saveBar=document.getElementById('settingSaveBar');if(saveBar)saveBar.style.display='block';
+loadDocEmpSelect();
 };
 
 function loadWp(){
@@ -1370,9 +1480,118 @@ showToast('엑셀 파일이 다운로드되었습니다');
 
 function closeModal(id){document.getElementById(id).style.display='none';}
 
-function showHelp(){
-document.getElementById('helpModal').style.display='flex';
+// ===== 보관자료 =====
+const DOC_KEY='alba_docs';
+let docTab='boss';
+
+function switchDocTab(t){
+  docTab=t;
+  document.getElementById('docTabBoss').style.background=t==='boss'?'linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%)':'#fff';
+  document.getElementById('docTabBoss').style.color=t==='boss'?'#fff':'var(--mut)';
+  document.getElementById('docTabBoss').style.border=t==='boss'?'none':'2px solid var(--bdr)';
+  document.getElementById('docTabEmp').style.background=t==='emp'?'linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%)':'#fff';
+  document.getElementById('docTabEmp').style.color=t==='emp'?'#fff':'var(--mut)';
+  document.getElementById('docTabEmp').style.border=t==='emp'?'none':'2px solid var(--bdr)';
+  document.getElementById('docEmpSelectWrap').style.display=t==='emp'?'block':'none';
+  loadDocList();
 }
+
+function loadDocEmpSelect(){
+  const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+  const sel=document.getElementById('docEmpSelect');
+  if(!sel)return;
+  sel.innerHTML='<option value="">직원 선택</option>'+emps.map((e,i)=>`<option value="${e.name}">${e.name}</option>`).join('');
+  loadDocList();
+}
+
+function loadDocList(){
+  const docs=JSON.parse(localStorage.getItem(DOC_KEY)||'[]');
+  const search=(document.getElementById('docSearch')?.value||'').toLowerCase();
+  const empName=document.getElementById('docEmpSelect')?.value||'';
+  const filtered=docs.filter(d=>{
+    if(docTab==='boss'&&d.owner!=='boss')return false;
+    if(docTab==='emp'){
+      if(d.owner==='boss')return false;
+      if(empName&&d.owner!==empName)return false;
+    }
+    if(search&&!d.name.toLowerCase().includes(search))return false;
+    return true;
+  });
+  document.getElementById('docCount').textContent=filtered.length;
+  const c=document.getElementById('docList');
+  if(!filtered.length){
+    c.innerHTML='<div style="text-align:center;color:var(--mut);font-size:12px;padding:20px 0;">등록된 자료가 없습니다</div>';
+    return;
+  }
+  c.innerHTML=filtered.map((d,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--sur2);border-radius:8px;margin-bottom:6px;border:1px solid var(--bdr);">
+      <div style="font-size:20px;flex-shrink:0;">📄</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:700;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.name}</div>
+        <div style="font-size:10px;color:var(--mut);">${d.owner==='boss'?'사장자료':d.owner} · ${d.date}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button onclick="viewDoc('${d.id}')" class="btn-sm btn-sm-blue" style="font-size:10px;padding:4px 8px;">보기</button>
+        <button onclick="deleteDoc('${d.id}')" class="btn-sm btn-sm-red" style="font-size:10px;padding:4px 8px;">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+function showDocUpload(){
+  const owner=docTab==='boss'?'boss':(document.getElementById('docEmpSelect')?.value||'');
+  if(docTab==='emp'&&!owner){showToast('직원을 먼저 선택하세요');return;}
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*,application/pdf';
+  input.onchange=function(){
+    const file=input.files[0];
+    if(!file)return;
+    if(file.size>2*1024*1024){showToast('파일 크기는 2MB 이하로 해주세요');return;}
+    const reader=new FileReader();
+    reader.onload=function(e){
+      const docs=JSON.parse(localStorage.getItem(DOC_KEY)||'[]');
+      const doc={
+        id:Date.now().toString(),
+        name:file.name,
+        owner:owner,
+        type:file.type,
+        data:e.target.result,
+        date:new Date().toLocaleDateString('ko-KR')
+      };
+      docs.push(doc);
+      localStorage.setItem(DOC_KEY,JSON.stringify(docs));
+      loadDocList();
+      showToast(file.name+' 저장됐습니다');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function viewDoc(id){
+  const docs=JSON.parse(localStorage.getItem(DOC_KEY)||'[]');
+  const doc=docs.find(d=>d.id===id);
+  if(!doc)return;
+  const w=window.open('','_blank');
+  if(doc.type==='application/pdf'){
+    w.document.write(`<html><body style="margin:0"><embed src="${doc.data}" width="100%" height="100%" type="application/pdf"></body></html>`);
+  }else{
+    w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${doc.data}" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>`);
+  }
+}
+
+function deleteDoc(id){
+  customConfirm('자료 삭제','이 자료를 삭제하시겠습니까?',()=>{
+    const docs=JSON.parse(localStorage.getItem(DOC_KEY)||'[]');
+    const filtered=docs.filter(d=>d.id!==id);
+    localStorage.setItem(DOC_KEY,JSON.stringify(filtered));
+    loadDocList();
+    showToast('삭제됐습니다');
+  });
+}
+// ===== 보관자료 끝 =====
+
+function showHelp(){goTab(4);}
 
 
 function savePayslipImage(){
