@@ -455,6 +455,60 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 </div>
 </div>
 
+<div class="modal" id="contractModal">
+<div class="modal-content" style="max-width:500px;max-height:90vh;overflow-y:auto;">
+<div class="modal-title">📄 근로계약서</div>
+<div id="contractView" style="display:none;">
+  <!-- 계약서 미리보기 -->
+  <div id="contractPreview" style="background:#fff;padding:20px;border:1px solid var(--bdr);border-radius:8px;font-size:12px;line-height:1.8;margin-bottom:12px;"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <button class="btn btn-blue" onclick="saveContract()">저장</button>
+    <button class="btn btn-green" onclick="printContract()">인쇄/PDF</button>
+  </div>
+  <button class="confirm-btn confirm-btn-cancel" onclick="document.getElementById('contractView').style.display='none';document.getElementById('contractForm').style.display='block';" style="width:100%;margin-bottom:8px;">수정</button>
+</div>
+<div id="contractForm">
+  <div style="font-size:11px;color:var(--mut);margin-bottom:12px;">직원 정보를 기반으로 자동 작성됩니다. 추가 내용을 입력하세요.</div>
+  <div class="form-field">
+    <label>사업장명</label>
+    <input type="text" id="ctBizName" placeholder="사업장명"/>
+  </div>
+  <div class="form-field">
+    <label>사업주 성명</label>
+    <input type="text" id="ctBossName" placeholder="사업주 성명"/>
+  </div>
+  <div class="form-field">
+    <label>사업장 주소</label>
+    <input type="text" id="ctBizAddr" placeholder="사업장 주소"/>
+  </div>
+  <div class="form-field">
+    <label>계약 시작일</label>
+    <input type="date" id="ctStartDate"/>
+  </div>
+  <div class="form-field">
+    <label>계약 종료일 (없으면 공란)</label>
+    <input type="date" id="ctEndDate"/>
+  </div>
+  <div class="form-field">
+    <label>근무 요일</label>
+    <input type="text" id="ctWorkDays" placeholder="예) 월~금, 주 5일"/>
+  </div>
+  <div class="form-field">
+    <label>휴게시간 (분)</label>
+    <input type="number" id="ctBreak" value="60" placeholder="60"/>
+  </div>
+  <div class="form-field">
+    <label>특이사항</label>
+    <textarea id="ctNote" rows="3" style="width:100%;padding:8px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;resize:none;" placeholder="추가 계약 내용 입력"></textarea>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+    <button class="btn btn-blue" onclick="previewContract()">미리보기</button>
+    <button class="confirm-btn confirm-btn-cancel" onclick="closeModal('contractModal')">닫기</button>
+  </div>
+</div>
+</div>
+</div>
+
 <div class="modal" id="wpModal">
 <div class="modal-content">
 <div class="modal-title">근무처 추가</div>
@@ -849,7 +903,7 @@ curX=e.touches[0].clientX;
 curY=e.touches[0].clientY;
 const diffX=Math.abs(curX-startX);
 const diffY=Math.abs(curY-startY);
-if(diffY>diffX+8){
+if(diffY>diffX){
 dragging=false;
 return;
 }
@@ -956,7 +1010,7 @@ const c=document.getElementById('employeeList');
 if(!emps.length){c.innerHTML='<p style="text-align:center;color:var(--mut);padding:20px 0;font-size:12px;">등록된 직원이 없습니다</p>';return;}
 c.innerHTML=emps.map((e,i)=>{
 const code=genEmpCode(e.name,e.wp||'');
-return`<div class="list-item"><div><div style="font-size:14px;font-weight:700;margin-bottom:2px;">${e.name}</div><div style="font-size:11px;color:var(--mut);">${e.wp} / 시급 ${(e.probation?Math.floor(e.wage*0.9):e.wage).toLocaleString()}원</div></div><div style="display:flex;gap:6px;"><button class="btn-sm btn-sm-blue" onclick="editEmp(${i})">수정</button><button class="btn-sm btn-sm-red" onclick="delEmp(${i})">삭제</button></div></div>`;
+return`<div class="list-item"><div><div style="font-size:14px;font-weight:700;margin-bottom:2px;">${e.name}</div><div style="font-size:11px;color:var(--mut);">${e.wp} / 시급 ${(e.probation?Math.floor(e.wage*0.9):e.wage).toLocaleString()}원</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;"><button class="btn-sm" style="background:linear-gradient(180deg,#7b1fa2 0%,#6a1b9a 100%);color:#fff;font-size:10px;box-shadow:0 2px 0 #4a148c;" onclick="showContract(${i})">근로계약서</button><button class="btn-sm btn-sm-blue" onclick="editEmp(${i})">수정</button><button class="btn-sm btn-sm-red" onclick="delEmp(${i})">삭제</button></div></div>`;
 }).join('');
 }
 
@@ -1480,7 +1534,141 @@ showToast('엑셀 파일이 다운로드되었습니다');
 
 function closeModal(id){document.getElementById(id).style.display='none';}
 
-// ===== 보관자료 =====
+// ===== 전자근로계약서 =====
+let contractEmpIdx = -1;
+
+function showContract(idx) {
+  contractEmpIdx = idx;
+  const emps = JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+  const e = emps[idx];
+  if(!e) return;
+  const settings = getSettings();
+  // 저장된 계약서 불러오기
+  const contracts = JSON.parse(localStorage.getItem('alba_contracts')||'{}');
+  const saved = contracts[e.name];
+  // 폼 초기값 설정
+  document.getElementById('ctStartDate').value = saved ? saved.startDate : '';
+  document.getElementById('ctEndDate').value = saved ? saved.endDate : '';
+  document.getElementById('ctBizName').value = saved ? saved.bizName : (JSON.parse(localStorage.getItem(ST.WP)||'[]')[0]?.name||'');
+  document.getElementById('ctBossName').value = saved ? saved.bossName : '';
+  document.getElementById('ctBizAddr').value = saved ? saved.bizAddr : '';
+  document.getElementById('ctWorkDays').value = saved ? saved.workDays : '월~금, 주 5일';
+  document.getElementById('ctBreak').value = saved ? saved.breakMin : 60;
+  document.getElementById('ctNote').value = saved ? saved.note : '';
+  document.getElementById('contractForm').style.display = 'block';
+  document.getElementById('contractView').style.display = 'none';
+  document.getElementById('contractModal').style.display = 'flex';
+}
+
+function previewContract() {
+  const emps = JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+  const e = emps[contractEmpIdx];
+  if(!e) return;
+  const settings = getSettings();
+  const wage = e.probation ? Math.floor(e.wage*0.9) : e.wage;
+  const bizName = document.getElementById('ctBizName').value;
+  const bossName = document.getElementById('ctBossName').value;
+  const bizAddr = document.getElementById('ctBizAddr').value;
+  const startDate = document.getElementById('ctStartDate').value;
+  const endDate = document.getElementById('ctEndDate').value;
+  const workDays = document.getElementById('ctWorkDays').value;
+  const breakMin = document.getElementById('ctBreak').value;
+  const note = document.getElementById('ctNote').value;
+  const today = new Date().toLocaleDateString('ko-KR');
+  const html = `
+<div style="text-align:center;font-size:16px;font-weight:900;margin-bottom:16px;letter-spacing:2px;">근 로 계 약 서</div>
+<div style="margin-bottom:10px;">사업주(이하 "갑")와 근로자(이하 "을")은 다음과 같이 근로계약을 체결한다.</div>
+<hr style="margin:10px 0;border:none;border-top:1.5px solid #333;">
+<div style="font-weight:700;margin-bottom:6px;">■ 사업주 정보</div>
+<table style="width:100%;font-size:11px;border-collapse:collapse;">
+  <tr><td style="padding:3px 6px;width:35%;color:#555;">사업장명</td><td style="padding:3px 6px;font-weight:700;">${bizName}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">사업주</td><td style="padding:3px 6px;font-weight:700;">${bossName}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">사업장 주소</td><td style="padding:3px 6px;">${bizAddr}</td></tr>
+</table>
+<hr style="margin:10px 0;border:none;border-top:1px solid #ccc;">
+<div style="font-weight:700;margin-bottom:6px;">■ 근로자 정보</div>
+<table style="width:100%;font-size:11px;border-collapse:collapse;">
+  <tr><td style="padding:3px 6px;width:35%;color:#555;">성명</td><td style="padding:3px 6px;font-weight:700;">${e.name}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">연락처</td><td style="padding:3px 6px;">${e.phone||'-'}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">주소</td><td style="padding:3px 6px;">${e.address||'-'}</td></tr>
+</table>
+<hr style="margin:10px 0;border:none;border-top:1px solid #ccc;">
+<div style="font-weight:700;margin-bottom:6px;">■ 근로 조건</div>
+<table style="width:100%;font-size:11px;border-collapse:collapse;">
+  <tr><td style="padding:3px 6px;width:35%;color:#555;">계약기간</td><td style="padding:3px 6px;">${startDate||'미정'} ~ ${endDate||'기간의 정함 없음'}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">근무처</td><td style="padding:3px 6px;">${e.wp||'-'}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">근무요일</td><td style="padding:3px 6px;">${workDays}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">근무시간</td><td style="padding:3px 6px;">${e.startTime||'09:00'} ~ ${e.endTime||'18:00'}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">휴게시간</td><td style="padding:3px 6px;">${breakMin}분</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">시급</td><td style="padding:3px 6px;font-weight:700;color:#1a73e8;">${wage.toLocaleString()}원${e.probation?' (수습 90%)':''}</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">급여지급일</td><td style="padding:3px 6px;">매월 말일</td></tr>
+  <tr><td style="padding:3px 6px;color:#555;">지급방법</td><td style="padding:3px 6px;">계좌이체 (${e.account||'-'})</td></tr>
+</table>
+${note ? `<hr style="margin:10px 0;border:none;border-top:1px solid #ccc;"><div style="font-weight:700;margin-bottom:4px;">■ 특이사항</div><div style="font-size:11px;line-height:1.7;">${note}</div>` : ''}
+<hr style="margin:12px 0;border:none;border-top:1.5px solid #333;">
+<div style="font-size:11px;margin-bottom:16px;">위와 같이 근로계약을 체결하고 각자 서명 날인한다.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:11px;">
+  <div style="text-align:center;">
+    <div style="margin-bottom:4px;font-weight:700;">사업주 (갑)</div>
+    <div style="height:40px;border-bottom:1px solid #333;margin-bottom:4px;"></div>
+    <div>${bossName} (인)</div>
+  </div>
+  <div style="text-align:center;">
+    <div style="margin-bottom:4px;font-weight:700;">근로자 (을)</div>
+    <div style="height:40px;border-bottom:1px solid #333;margin-bottom:4px;"></div>
+    <div>${e.name} (인)</div>
+  </div>
+</div>
+<div style="text-align:center;margin-top:12px;font-size:11px;color:#555;">${today}</div>`;
+  document.getElementById('contractPreview').innerHTML = html;
+  document.getElementById('contractForm').style.display = 'none';
+  document.getElementById('contractView').style.display = 'block';
+}
+
+function saveContract() {
+  const emps = JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+  const e = emps[contractEmpIdx];
+  if(!e) return;
+  const data = {
+    bizName: document.getElementById('ctBizName').value,
+    bossName: document.getElementById('ctBossName').value,
+    bizAddr: document.getElementById('ctBizAddr').value,
+    startDate: document.getElementById('ctStartDate').value,
+    endDate: document.getElementById('ctEndDate').value,
+    workDays: document.getElementById('ctWorkDays').value,
+    breakMin: document.getElementById('ctBreak').value,
+    note: document.getElementById('ctNote').value,
+    savedAt: new Date().toISOString()
+  };
+  const contracts = JSON.parse(localStorage.getItem('alba_contracts')||'{}');
+  contracts[e.name] = data;
+  localStorage.setItem('alba_contracts', JSON.stringify(contracts));
+  // 보관자료에도 저장
+  const docs = JSON.parse(localStorage.getItem(DOC_KEY)||'[]');
+  const existing = docs.findIndex(d=>d.owner===e.name&&d.name==='근로계약서');
+  const doc = {
+    id: existing>=0 ? docs[existing].id : Date.now().toString(),
+    name: '근로계약서',
+    owner: e.name,
+    type: 'contract',
+    html: document.getElementById('contractPreview').innerHTML,
+    date: new Date().toLocaleDateString('ko-KR')
+  };
+  if(existing>=0) docs[existing]=doc; else docs.push(doc);
+  localStorage.setItem(DOC_KEY, JSON.stringify(docs));
+  showToast(e.name+'님 근로계약서가 저장됐습니다');
+  closeModal('contractModal');
+}
+
+function printContract() {
+  const html = document.getElementById('contractPreview').innerHTML;
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>근로계약서</title><style>body{font-family:'Noto Sans KR',sans-serif;padding:20px;max-width:600px;margin:0 auto;}@media print{body{padding:10px;}}</style></head><body>${html}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+// ===== 전자근로계약서 끝 =====
+
+
 const DOC_KEY='alba_docs';
 let docTab='boss';
 
