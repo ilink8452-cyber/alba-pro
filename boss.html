@@ -222,7 +222,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
     <div style="font-size:12px;font-weight:700;color:var(--acc);margin-bottom:8px;">💰 급여 기준</div>
     <div class="form-field" style="margin-bottom:6px;">
       <label style="font-size:9px;margin-bottom:2px;">법정시급</label>
-      <input type="number" id="minWage" value="10030" style="padding:6px;font-size:11px;"/>
+      <input type="number" id="minWage" value="10320" style="padding:6px;font-size:11px;"/>
     </div>
     <div class="form-field" style="margin-bottom:6px;">
       <label style="font-size:9px;margin-bottom:2px;">주휴기준 (시간)</label>
@@ -396,7 +396,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
     · + 추가로 근무처(매장) 등록<br>
     · 여러 매장 운영 시 각각 등록<br><br>
     <b>💰 급여 기준</b><br>
-    · 법정시급: 2026년 기준 10,030원<br>
+    · 법정시급: 2026년 기준 10,320원<br>
     · 주휴기준: 주 15시간 이상 시 주휴수당 발생<br><br>
     <b>🛡️ 4대보험</b><br>
     · 필요한 항목만 체크 후 설정 저장<br><br>
@@ -1071,7 +1071,7 @@ window._fbSet(window._fbRef(window._fbDb,'alba_employees'),simplified).catch(()=
 }
 
 function renderIns(){
-const ins=[{id:'pension',name:'국민연금',rate:4.5},{id:'health',name:'건강보험',rate:3.545},{id:'care',name:'장기요양',rate:12.95},{id:'employment',name:'고용보험',rate:0.9}];
+const ins=[{id:'pension',name:'국민연금',rate:4.75},{id:'health',name:'건강보험',rate:3.595},{id:'care',name:'장기요양',rate:13.14},{id:'employment',name:'고용보험',rate:0.9}];
 const settings=getSettings();
 document.getElementById('insuranceGrid').innerHTML=ins.map(i=>{
 const saved=settings.insurance&&settings.insurance[i.id]?settings.insurance[i.id]:{enabled:true,rate:i.rate};
@@ -1098,7 +1098,7 @@ showToast('설정이 저장되었습니다');
 }
 
 function getSettings(){
-const def={minWage:10030,weeklyThreshold:15,weeklyEnabled:true,weekStartDay:1,weekEndDay:0,insurance:{pension:{enabled:true,rate:4.5},health:{enabled:true,rate:3.545},care:{enabled:true,rate:12.95},employment:{enabled:true,rate:0.9}}};
+const def={minWage:10320,weeklyThreshold:15,weeklyEnabled:true,weekStartDay:1,weekEndDay:0,insurance:{pension:{enabled:true,rate:4.75},health:{enabled:true,rate:3.595},care:{enabled:true,rate:13.14},employment:{enabled:true,rate:0.9}}};
 const saved=localStorage.getItem(ST.SET);
 if(saved){
 const parsed=JSON.parse(saved);
