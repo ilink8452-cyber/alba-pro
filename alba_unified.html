@@ -1,0 +1,1931 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>급여관리</title>
+<meta name="theme-color" content="#1a73e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="급여관리">
+<link rel="manifest" href="boss-manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, onValue, set, push, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+const firebaseConfig = {
+  apiKey: "AIzaSyAhKNC0bkWDruBBkZbWvRPAUWEhkndPI5M",
+  authDomain: "alba-pro.firebaseapp.com",
+  databaseURL: "https://alba-pro-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "alba-pro",
+  storageBucket: "alba-pro.firebasestorage.app",
+  messagingSenderId: "783277689187",
+  appId: "1:783277689187:web:df64da80d932e45586eb56"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+window._fbDb = db;
+window._fbRef = ref;
+window._fbOnValue = onValue;
+window._fbSet = set;
+window._fbPush = push;
+window._fbRemove = remove;
+window._fbGet = get;
+// 알바생 전송 데이터 실시간 자동 반영
+const pendingRef = ref(db, 'alba_pending');
+onValue(pendingRef, (snapshot) => {
+  const data = snapshot.val();
+  if(!data) return;
+  const keys = Object.keys(data);
+  if(keys.length === 0) return;
+  // 새 데이터 자동 반영
+  keys.forEach(key => {
+    const payload = data[key];
+    if(!payload || !payload.emp || !payload.records) return;
+    // localStorage에 반영
+    const ST_REC = 'alba_rec';
+    const empsRaw = localStorage.getItem('alba_emp');
+    const emps = empsRaw ? JSON.parse(empsRaw) : [];
+    const emp = emps.find(e => e.name === payload.emp);
+    const recs = JSON.parse(localStorage.getItem(ST_REC) || '[]');
+    const dates = new Set(payload.records.map(r => r.date));
+    const filtered = recs.filter(r => !(r.emp === payload.emp && dates.has(r.date)));
+    const newRecs = payload.records.map(r => ({
+      emp: payload.emp, date: r.date, start: r.start, end: r.end, hours: r.hours,
+    }));
+    localStorage.setItem(ST_REC, JSON.stringify(filtered.concat(newRecs)));
+    // Firebase에서 처리 완료된 항목 삭제
+    remove(ref(db, 'alba_pending/' + key));
+    // 급여대장 갱신 (함수가 로드된 후에 호출)
+    if(typeof loadPayroll === 'function') loadPayroll();
+    // 토스트 알림
+    if(typeof showToast === 'function') {
+      showToast(`📲 ${payload.emp}님 근무데이터 ${newRecs.length}건 자동 반영됐습니다`);
+    }
+  });
+});
+window._fbReady = true;
+console.log('✅ Firebase 연결됨');
+</script>
+<style>
+
+:root{--bg:#f5f7fa;--sur:#fff;--sur2:#f0f2f5;--bdr:#dde1e7;--acc:#1a73e8;--good:#2e7d32;--warn:#f57c00;--bad:#c62828;--txt:#1a1a1a;--mut:#5f6368;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden;}
+*{scrollbar-width:none;-ms-overflow-style:none;}
+*::-webkit-scrollbar{display:none;}
+.hdr{background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 60%,#1557b0 100%);color:#fff;border:none;padding:11px 16px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;box-shadow:0 3px 0 #0d3c7a,0 4px 8px rgba(0,0,0,.15);}
+.hdr h1{font-size:15px;font-weight:700;}
+.hdate{position:absolute;right:16px;font-size:10px;color:rgba(255,255,255,0.8);font-family:'DM Mono',monospace;}
+.tdots{display:flex;justify-content:center;align-items:center;gap:6px;padding:7px 0;background:#fff;border-bottom:1px solid var(--bdr);}
+.tdot{width:6px;height:6px;border-radius:50%;background:var(--bdr);transition:all .3s;cursor:pointer;}
+.tdot.on{background:var(--acc);width:20px;border-radius:3px;}
+.tab-label{font-size:12px;font-weight:700;color:var(--acc);margin-left:4px;}
+.sw{overflow:hidden;touch-action:pan-y;height:calc(100vh - 100px);}
+.sl{display:flex;transition:transform .35s cubic-bezier(.4,0,.2,1);height:100%;width:500%;}
+.pg{min-width:20%;width:20%;padding:14px;padding-bottom:160px;max-width:20%;overflow-y:auto;height:100%;box-sizing:border-box;}
+.btn{display:inline-flex;align-items:center;justify-content:center;width:100%;padding:13px;border-radius:12px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:transform .1s,box-shadow .1s;user-select:none;}
+.btn-blue{background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 60%,#1557b0 100%);color:#fff;box-shadow:0 5px 0 #0d3c7a,0 6px 8px rgba(0,0,0,.25);}
+.btn-blue:active{transform:translateY(4px);box-shadow:0 1px 0 #0d3c7a,0 2px 4px rgba(0,0,0,.2);}
+.btn-green{background:linear-gradient(180deg,#4caf50 0%,#2e7d32 60%,#1b5e20 100%);color:#fff;margin-top:6px;box-shadow:0 6px 0 #0d3311,0 7px 10px rgba(0,0,0,.25);}
+.btn-green:active{transform:translateY(6px);box-shadow:0 0px 0 #0d3311,0 1px 3px rgba(0,0,0,.2);}
+.btn-red{background:linear-gradient(180deg,#ef5350 0%,#c62828 60%,#7f0000 100%);color:#fff;box-shadow:0 5px 0 #4a0000,0 6px 8px rgba(0,0,0,.25);}
+.btn-red:active{transform:translateY(4px);box-shadow:0 1px 0 #4a0000,0 2px 4px rgba(0,0,0,.2);}
+.card{background:#fff;border:1.5px solid var(--bdr);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 4px 0 #c8cdd6,0 5px 8px rgba(0,0,0,.1);}
+.card-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--txt);}
+.form-field{margin-bottom:10px;}
+.form-field label{display:block;font-size:11px;font-weight:600;color:var(--mut);margin-bottom:4px;}
+.form-field input,.form-field select{width:100%;padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;transition:border-color .2s;}
+.form-field input:focus,.form-field select:focus{outline:none;border-color:var(--acc);}
+.list-item{display:flex;align-items:center;justify-content:space-between;padding:12px;background:#fff;border:1.5px solid var(--bdr);border-radius:10px;margin-bottom:8px;box-shadow:0 3px 0 #c8cdd6,0 4px 6px rgba(0,0,0,.08);transition:transform .1s,box-shadow .1s;}
+.list-item:active{transform:translateY(2px);box-shadow:0 1px 0 #c8cdd6,0 2px 3px rgba(0,0,0,.06);}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px;border:none;font-weight:700;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.2),0 4px 6px rgba(0,0,0,.15);transition:transform .1s,box-shadow .1s;}
+.btn-sm:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.2),0 2px 3px rgba(0,0,0,.1);}
+.btn-sm-blue{background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;}
+.btn-sm-red{background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;}
+.btn-sm-green{background:linear-gradient(180deg,#4caf50 0%,#2e7d32 100%);color:#fff;}
+.btn-sm-warn{background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;}
+.modal-content{background:#fff;border-radius:16px;padding:24px;max-width:400px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);animation:modalPop 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);}
+@keyframes modalPop{from{transform:scale(0.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:12px;text-align:center;color:var(--txt);}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px;}
+.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;border:1.5px solid var(--bdr);border-radius:8px;font-size:11px;cursor:pointer;box-shadow:0 2px 0 #c8cdd6,0 3px 4px rgba(0,0,0,.06);transition:transform .1s,box-shadow .1s;position:relative;}
+.cal-cell:active{transform:translateY(1px);box-shadow:0 1px 0 #c8cdd6,0 1px 2px rgba(0,0,0,.04);}
+.cal-cell.work{background:#e3f2fd;border-color:#1976d2;}
+.cal-cell.today{background:#fff9c4;border-color:#fbc02d;}
+.cal-header{font-size:10px;font-weight:700;color:var(--mut);padding:8px;text-align:center;}
+.work-badge{position:absolute;top:2px;right:2px;background:var(--acc);color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700;}
+.toast{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:2000;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.3);max-width:80%;text-align:center;}
+.work-list{margin-top:10px;}
+.work-item{display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--sur2);border-radius:8px;margin-bottom:6px;font-size:12px;}
+.payslip{padding:14px;background:#fff;border-radius:12px;}
+.payslip-section{margin-bottom:10px;padding:10px;background:#fff;border:1.5px solid var(--bdr);border-radius:10px;box-shadow:0 3px 0 #c8cdd6,0 4px 6px rgba(0,0,0,.08);}
+.payslip-section:last-child{box-shadow:0 3px 0 #c8cdd6,0 4px 6px rgba(0,0,0,.08);}
+.payslip-row{display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px;}
+.payslip-total{font-size:14px;font-weight:700;color:var(--acc);margin-top:10px;padding:10px;background:#fff;border:1.5px solid var(--bdr);border-radius:10px;box-shadow:0 3px 0 #c8cdd6,0 4px 6px rgba(0,0,0,.08);}
+.lock-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;}
+.lock-content{text-align:center;color:#fff;}
+.lock-title{font-size:24px;font-weight:700;margin-bottom:10px;}
+.lock-subtitle{font-size:14px;opacity:0.9;margin-bottom:30px;}
+.pin-input{display:flex;gap:15px;justify-content:center;margin-bottom:30px;}
+.pin-dot{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);background:transparent;transition:all 0.2s;}
+.pin-dot.filled{background:#fff;border-color:#fff;}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;max-width:250px;}
+.pin-key{width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.3);color:#fff;font-size:24px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;user-select:none;}
+.pin-key::after{content:'';position:absolute;top:50%;left:50%;width:100%;height:100%;border-radius:50%;background:rgba(255,255,255,0.4);transform:translate(-50%,-50%) scale(0);transition:transform 0.3s ease-out,opacity 0.3s ease-out;opacity:0;}
+.pin-key:active::after{transform:translate(-50%,-50%) scale(1);opacity:1;transition:transform 0s,opacity 0s;}
+.pin-key:active{background:rgba(255,255,255,0.3);}
+.pin-delete{grid-column:3;}
+.pin-error{color:#ffeb3b;font-size:13px;margin-top:10px;min-height:20px;}
+.confirm-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center;}
+.confirm-box{background:#fff;border-radius:16px;padding:24px;max-width:320px;width:85%;box-shadow:0 10px 40px rgba(0,0,0,0.3);animation:confirmPop 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);}
+@keyframes confirmPop{from{transform:scale(0.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+.confirm-title{font-size:16px;font-weight:700;margin-bottom:12px;color:var(--txt);text-align:center;}
+.confirm-message{font-size:13px;color:var(--mut);margin-bottom:20px;text-align:center;line-height:1.5;}
+.confirm-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.confirm-btn{padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;}
+.confirm-btn-cancel{background:var(--sur2);color:var(--txt);}
+.confirm-btn-confirm{background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;box-shadow:0 3px 0 #7f0000;}
+.confirm-btn-confirm:active{transform:translateY(2px);box-shadow:0 1px 0 #7f0000;}
+.confirm-btn-ok{background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;box-shadow:0 3px 0 #0d3c7a;grid-column:span 2;}
+.confirm-btn-ok:active{transform:translateY(2px);box-shadow:0 1px 0 #0d3c7a;}
+.numpad-btn{height:42px;border-radius:10px;border:1.5px solid var(--bdr);background:#fff;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #c8cdd6;transition:transform .1s,box-shadow .1s;color:var(--txt);}
+.numpad-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #c8cdd6;}
+
+.np-btn{display:flex;align-items:center;justify-content:center;padding:14px 10px;border-radius:12px;border:1.5px solid var(--bdr);background:#fff;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #c8cdd6;}
+.np-btn:active{transform:translateY(3px);box-shadow:0 0 0 #c8cdd6;}
+.np-c{background:#fff3e0;color:var(--warn);}
+.np-del{background:#fce4ec;color:var(--bad);}
+.send-bar{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1.5px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:50;}
+</style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="loginScreen" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f7fa;">
+  <div style="position:absolute;top:-100px;right:-60px;width:280px;height:280px;border-radius:50%;background:linear-gradient(135deg,#e8f0fe,#d2e3fc);opacity:0.8;pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-80px;left:-50px;width:240px;height:240px;border-radius:50%;background:linear-gradient(135deg,#fce4ec,#f8bbd0);opacity:0.7;pointer-events:none;"></div>
+  <div style="margin-bottom:48px;text-align:center;">
+    <div style="width:80px;height:80px;border-radius:24px;background:#fff;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;box-shadow:8px 8px 20px rgba(0,0,0,0.10),-4px -4px 12px rgba(255,255,255,1);">
+      <div style="display:flex;align-items:flex-end;gap:6px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div style="width:16px;height:16px;border-radius:50%;background:#1565c0;"></div>
+          <div style="width:20px;height:18px;border-radius:6px 6px 4px 4px;background:#1565c0;position:relative;">
+            <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:5px;height:8px;background:#0d47a1;border-radius:2px;"></div>
+          </div>
+        </div>
+        <div style="width:14px;height:3px;background:linear-gradient(90deg,#1565c0,#c62828);border-radius:2px;margin-bottom:10px;"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div style="position:relative;">
+            <div style="width:16px;height:16px;border-radius:50%;background:#c62828;"></div>
+            <div style="position:absolute;top:-5px;left:-2px;width:20px;height:6px;background:#c62828;border-radius:4px 4px 0 0;"></div>
+            <div style="position:absolute;top:-4px;right:-6px;width:7px;height:3px;background:#b71c1c;border-radius:0 3px 3px 0;"></div>
+          </div>
+          <div style="width:20px;height:18px;border-radius:6px 6px 4px 4px;background:#c62828;"></div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:22px;font-weight:900;color:#1a1a2e;letter-spacing:0.5px;margin-bottom:4px;">직원 급여관리</div>
+    <div style="font-size:11px;color:#9aa5b4;letter-spacing:3px;">PAYROLL MANAGER</div>
+  </div>
+  <div style="width:100%;max-width:300px;padding:0 20px;display:flex;flex-direction:column;gap:14px;">
+    <button onclick="loginBoss()" style="padding:18px 20px;border-radius:18px;border:none;cursor:pointer;background:#fff;box-shadow:6px 6px 16px rgba(21,101,192,0.15),-4px -4px 10px rgba(255,255,255,1);display:flex;align-items:center;gap:14px;">
+      <div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(145deg,#1976d2,#1565c0);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:3px 3px 8px rgba(21,101,192,0.4);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div style="width:12px;height:12px;border-radius:50%;background:white;"></div>
+          <div style="width:16px;height:13px;border-radius:5px 5px 3px 3px;background:white;opacity:0.9;position:relative;"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:4px;height:6px;background:#1565c0;border-radius:1px;"></div></div>
+        </div>
+      </div>
+      <div style="text-align:left;flex:1;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">사장</div><div style="font-size:11px;color:#9aa5b4;margin-top:2px;">급여 관리 · 직원 등록</div></div>
+      <div style="width:28px;height:28px;border-radius:8px;background:#f0f4ff;display:flex;align-items:center;justify-content:center;color:#1565c0;font-size:16px;font-weight:700;">›</div>
+    </button>
+    <button onclick="showWorkerLogin()" style="padding:18px 20px;border-radius:18px;border:none;cursor:pointer;background:#fff;box-shadow:6px 6px 16px rgba(198,40,40,0.12),-4px -4px 10px rgba(255,255,255,1);display:flex;align-items:center;gap:14px;">
+      <div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(145deg,#ef5350,#c62828);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:3px 3px 8px rgba(198,40,40,0.4);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div style="position:relative;"><div style="width:12px;height:12px;border-radius:50%;background:white;"></div><div style="position:absolute;top:-5px;left:-2px;width:16px;height:6px;background:white;border-radius:3px 3px 0 0;opacity:0.9;"></div><div style="position:absolute;top:-5px;right:-5px;width:6px;height:3px;background:white;border-radius:0 2px 2px 0;opacity:0.8;"></div></div>
+          <div style="width:16px;height:13px;border-radius:5px 5px 3px 3px;background:white;opacity:0.9;"></div>
+        </div>
+      </div>
+      <div style="text-align:left;flex:1;"><div style="font-size:16px;font-weight:800;color:#1a1a2e;">알바</div><div style="font-size:11px;color:#9aa5b4;margin-top:2px;">근무 입력 · 시간 확인</div></div>
+      <div style="width:28px;height:28px;border-radius:8px;background:#fff0f0;display:flex;align-items:center;justify-content:center;color:#c62828;font-size:16px;font-weight:700;">›</div>
+    </button>
+  </div>
+  <div style="position:absolute;bottom:28px;font-size:11px;color:#b0bec5;letter-spacing:1px;">Payroll Manager v2.0</div>
+  <!-- 알바 전화번호 입력 -->
+  <div id="workerLoginBox" style="display:none;position:absolute;inset:0;background:#f5f7fa;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:100%;max-width:300px;">
+      <button onclick="hideWorkerLogin()" style="background:none;border:none;color:#9aa5b4;font-size:13px;cursor:pointer;margin-bottom:28px;padding:0;">‹ 뒤로</button>
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="width:60px;height:60px;border-radius:18px;background:linear-gradient(145deg,#ef5350,#c62828);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;box-shadow:4px 4px 12px rgba(198,40,40,0.3),-2px -2px 8px rgba(255,255,255,0.8);">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="position:relative;"><div style="width:14px;height:14px;border-radius:50%;background:white;"></div><div style="position:absolute;top:-5px;left:-2px;width:18px;height:6px;background:white;border-radius:3px 3px 0 0;opacity:0.9;"></div><div style="position:absolute;top:-5px;right:-5px;width:6px;height:3px;background:white;border-radius:0 2px 2px 0;opacity:0.8;"></div></div><div style="width:18px;height:14px;border-radius:5px 5px 3px 3px;background:white;opacity:0.9;"></div></div>
+        </div>
+        <div style="font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:6px;">알바 로그인</div>
+        <div style="font-size:12px;color:#9aa5b4;">전화번호를 입력하세요</div>
+      </div>
+      <div style="background:#fff;border:1.5px solid #e8edf2;border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:inset 2px 2px 6px rgba(0,0,0,0.04);">
+        <div style="width:8px;height:8px;border-radius:50%;background:#c62828;flex-shrink:0;"></div>
+        <input id="loginPhoneInput" type="tel" maxlength="11" placeholder="01012345678" style="flex:1;background:none;border:none;outline:none;font-size:16px;font-weight:700;color:#1a1a2e;letter-spacing:2px;" onkeydown="if(event.key==='Enter')doWorkerLogin()"/>
+      </div>
+      <div id="loginPhoneMsg" style="font-size:12px;color:#ef5350;text-align:center;min-height:18px;margin-bottom:16px;"></div>
+      <button onclick="doWorkerLogin()" style="width:100%;padding:16px;border-radius:14px;border:none;background:linear-gradient(145deg,#ef5350,#c62828);color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:4px 4px 12px rgba(198,40,40,0.35);">확인</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- 사장앱 -->
+<div id="bossApp" style="display:none;">
+<div class="hdr">
+<h1>💼 직원 급여관리</h1>
+<div class="hdate" onclick="logout()" style="cursor:pointer;font-size:11px;color:rgba(255,255,255,0.8);">로그아웃</div>
+</div>
+<div class="tdots">
+<div class="tdot on" onclick="goTab(0)" style="cursor:pointer;"></div><span class="tab-label" onclick="goTab(0)" style="cursor:pointer;">설정/조회</span>
+<div class="tdot" onclick="goTab(1)" style="cursor:pointer;"></div><span class="tab-label" onclick="goTab(1)" style="cursor:pointer;">직원관리</span>
+<div class="tdot" onclick="goTab(2)" style="cursor:pointer;"></div><span class="tab-label" onclick="goTab(2)" style="cursor:pointer;">급여계산</span>
+<div class="tdot" onclick="goTab(3)" style="cursor:pointer;"></div><span class="tab-label" onclick="goTab(3)" style="cursor:pointer;">급여대장</span>
+<div class="tdot" onclick="goTab(4)" style="cursor:pointer;"></div><span class="tab-label" onclick="goTab(4)" style="cursor:pointer;">도움말</span>
+</div>
+<div class="sw" id="swiper">
+<div class="sl" id="slider">
+<div class="pg" style="padding-bottom:80px;">
+
+<!-- 탭명 변경: 설정/조회 -->
+
+
+<div class="card" style="padding:12px;margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <div style="font-size:13px;font-weight:700;color:var(--txt);">🏪 근무처 관리</div>
+    <button onclick="showWorkplaceModal()" style="padding:6px 12px;border-radius:8px;border:none;background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 #0d3c7a;white-space:nowrap;">+ 추가</button>
+  </div>
+  <div id="workplaceList" style="min-height:60px;max-height:180px;overflow-y:auto;"></div>
+</div>
+
+<!-- ③ 급여기준 + 4대보험 -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--acc);margin-bottom:8px;">💰 급여 기준</div>
+    <div class="form-field" style="margin-bottom:6px;">
+      <label style="font-size:9px;margin-bottom:2px;">법정시급</label>
+      <input type="number" id="minWage" value="10320" style="padding:6px;font-size:11px;"/>
+    </div>
+    <div class="form-field" style="margin-bottom:6px;">
+      <label style="font-size:9px;margin-bottom:2px;">주휴기준 (시간)</label>
+      <input type="number" id="weeklyThreshold" value="15" style="padding:6px;font-size:11px;"/>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10px;">
+      <input type="checkbox" id="weeklyAllowanceEnabled" checked style="width:14px;height:14px;">
+      <span>주휴수당 자동계산</span>
+    </label>
+  </div>
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px;">🛡️ 4대보험</div>
+    <div id="insuranceGrid"></div>
+  </div>
+</div>
+
+<!-- ④ 주휴요일 + 보안 -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;">📅 주휴 계산 요일</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+      <div class="form-field" style="margin-bottom:0;">
+        <label style="font-size:9px;margin-bottom:2px;">시작</label>
+        <select id="weekStartDay" style="padding:5px;font-size:10px;">
+          <option value="0">일요일</option>
+          <option value="1" selected>월요일</option>
+          <option value="2">화요일</option>
+          <option value="3">수요일</option>
+          <option value="4">목요일</option>
+          <option value="5">금요일</option>
+          <option value="6">토요일</option>
+        </select>
+      </div>
+      <div class="form-field" style="margin-bottom:0;">
+        <label style="font-size:9px;margin-bottom:2px;">종료</label>
+        <select id="weekEndDay" style="padding:5px;font-size:10px;">
+          <option value="0" selected>일요일</option>
+          <option value="1">월요일</option>
+          <option value="2">화요일</option>
+          <option value="3">수요일</option>
+          <option value="4">목요일</option>
+          <option value="5">금요일</option>
+          <option value="6">토요일</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:8px;padding:6px;background:var(--sur2);border-radius:6px;font-size:9px;color:var(--mut);line-height:1.5;">
+      💡 주 15시간 이상 시 자동계산
+    </div>
+  </div>
+  <div class="card" style="padding:10px;">
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;">🔐 보안 설정</div>
+    <label style="display:flex;align-items:center;justify-content:space-between;padding:7px;background:var(--sur2);border-radius:8px;margin-bottom:6px;cursor:pointer;">
+      <span style="font-size:11px;font-weight:600;">비밀번호 사용</span>
+      <input type="checkbox" id="usePinLock" onchange="togglePinLock()" style="width:16px;height:16px;cursor:pointer;">
+    </label>
+    <button class="btn btn-blue" onclick="changePin()" id="changePinBtn" style="padding:6px;font-size:11px;display:none;">비밀번호 변경</button>
+    <div style="margin-top:6px;padding:6px;background:var(--sur2);border-radius:6px;font-size:9px;color:var(--mut);line-height:1.5;">
+      💡 앱 실행 시 4자리 입력
+    </div>
+  </div>
+</div>
+
+</div>
+<div id="settingSaveBar" style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1.5px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:50;display:none;">
+  <button class="btn btn-green" onclick="saveSettings()">설정 저장</button>
+</div>
+
+<div class="pg">
+<div class="card">
+<div class="card-title">직원 관리</div>
+<button class="btn btn-blue" onclick="showEmployeeModal()">직원 추가</button>
+<div id="employeeList" style="margin-top:12px;"></div>
+</div>
+</div>
+
+<div class="pg" style="padding-bottom:120px;">
+<div class="card">
+<div class="card-title">급여 계산</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+<select id="empSelect" onchange="selectEmp()" style="padding:8px;border:1.5px solid var(--bdr);border-radius:8px;font-size:12px;">
+<option value="">직원 선택</option>
+</select>
+<label style="display:flex;align-items:center;justify-content:center;gap:4px;padding:6px;background:var(--sur2);border-radius:8px;font-size:11px;white-space:nowrap;">
+<span>수습</span>
+</label>
+<label style="display:flex;align-items:center;justify-content:center;gap:4px;padding:6px;background:var(--sur2);border-radius:8px;font-size:11px;white-space:nowrap;">
+<input type="checkbox" id="calcWeeklyCheck" checked onchange="calcSum();loadPayroll();" style="width:14px;height:14px;">
+<span>주휴</span>
+</label>
+</div>
+<div style="position:relative;display:flex;justify-content:center;align-items:center;margin-bottom:10px;">
+<div id="calTitle" style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px;">
+  <button class="btn-sm btn-sm-blue" onclick="prevMonth()" style="padding:6px 10px;font-size:13px;">◀</button>
+  <span id="calTitleText">2026년 5월</span>
+  <button class="btn-sm btn-sm-blue" onclick="nextMonth()" style="padding:6px 10px;font-size:13px;">▶</button>
+</div>
+<div id="selectDelBtn" style="display:none;position:absolute;right:0;">
+  <button onclick="startSelectDel()" style="padding:5px 8px;border-radius:8px;border:none;font-size:10px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;box-shadow:0 2px 0 #e65100;white-space:nowrap;">선택삭제</button>
+</div>
+<div id="selectDelBar" style="display:none;position:absolute;right:0;gap:6px;align-items:center;">
+  <button onclick="confirmSelectDel()" style="padding:5px 8px;border-radius:8px;border:none;font-size:10px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;box-shadow:0 2px 0 #7f0000;white-space:nowrap;">삭제(<span id="selCount">0</span>일)</button>
+  <button onclick="cancelSelectDel()" style="padding:5px 8px;border-radius:8px;border:none;font-size:10px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);">취소</button>
+</div>
+</div>
+<div class="cal" id="calendar"></div>
+</div>
+<div class="card">
+<div class="card-title">급여 요약</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+<div class="card" style="padding:10px;margin:0;">
+<div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--acc);">급여 내역</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+<span style="font-size:13px;">근무시간</span>
+<strong id="sumHours" style="font-size:13px;font-family:'DM Mono',monospace;">0h</strong>
+</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+<span style="font-size:13px;">근무급여</span>
+<strong id="sumBasic" style="font-size:13px;font-family:'DM Mono',monospace;">0원</strong>
+</div>
+<div style="display:flex;justify-content:space-between;">
+<span style="font-size:13px;">주휴수당</span>
+<strong id="sumWeekly" style="font-size:13px;font-family:'DM Mono',monospace;">0원</strong>
+</div>
+</div>
+<div class="card" style="padding:10px;margin:0;">
+<div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--bad);">공제 내역</div>
+<div style="font-size:11px;line-height:1.8;">
+<div id="insPension">국민연금: 0원</div>
+<div id="insHealth">건강보험: 0원</div>
+<div id="insCare">장기요양: 0원</div>
+<div id="insEmployment">고용보험: 0원</div>
+</div>
+</div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:linear-gradient(135deg,var(--acc),#1557b0);color:#fff;border-radius:10px;box-shadow:0 3px 0 #0d3c7a,0 4px 6px rgba(0,0,0,.15);">
+<span style="font-size:15px;font-weight:700;">실지급 급여</span>
+<strong id="sumNet" style="font-size:18px;font-family:'DM Mono',monospace;">0원</strong>
+</div>
+</div>
+</div>
+
+<div class="pg">
+<div class="card">
+<div class="card-title">급여대장</div>
+<div style="display:flex;gap:8px;margin-bottom:10px;">
+<select id="payYear" onchange="loadPayroll()" style="flex:1;padding:8px;border:1.5px solid var(--bdr);border-radius:8px;">
+<option>2025</option>
+<option selected>2026</option>
+<option>2027</option>
+</select>
+<select id="payMonth" onchange="loadPayroll()" style="flex:1;padding:8px;border:1.5px solid var(--bdr);border-radius:8px;" id="payMonthSel">
+<option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option>
+</select>
+<button class="btn-sm btn-sm-blue" onclick="exportExcel()">엑셀</button>
+</div>
+<!-- 알바생 데이터 자동수신 중 -->
+<div id="payrollTable"></div>
+</div>
+</div>
+
+<!-- 도움말 탭 (goTab 4) -->
+
+<div class="pg" style="padding-bottom:80px;">
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📱 설정/조회 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    <b>📁 보관자료</b><br>
+    · 사장 자료 / 직원 자료 탭으로 구분<br>
+    · + 추가 버튼으로 이미지 업로드<br>
+    · 파일명 검색 가능<br>
+    · 법적 증거자료로 활용 가능<br><br>
+    <b>🏪 근무처 관리</b><br>
+    · + 추가로 근무처(매장) 등록<br>
+    · 여러 매장 운영 시 각각 등록<br><br>
+    <b>💰 급여 기준</b><br>
+    · 법정시급: 2026년 기준 10,320원<br>
+    · 주휴기준: 주 15시간 이상 시 주휴수당 발생<br><br>
+    <b>🛡️ 4대보험</b><br>
+    · 필요한 항목만 체크 후 설정 저장<br><br>
+    <b>🔐 보안 설정</b><br>
+    · 비밀번호 사용 체크 시 4자리 PIN 설정
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">👤 직원관리 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · + 직원 추가로 직원 등록<br>
+    · 이름, 근무처, 시급, 수습여부 입력<br>
+    · 전화번호 입력 시 알바앱에서 자동 인식<br>
+    · 알바앱 비밀번호 4자리 설정 가능<br>
+    · 기본 출퇴근 시간 설정 (캘린더 기본값)<br>
+    · 수정/삭제/해제 버튼으로 직원 관리
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📅 급여계산 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 직원 선택 후 캘린더에서 날짜 클릭<br>
+    · 숫자패드로 출퇴근 시간 입력<br>
+    · 출근 시간 4자리 입력 → 퇴근 자동 이동<br>
+    · 근무 있는 날짜는 파란색 표시<br>
+    · <b>선택삭제</b>: 여러 날짜 한번에 삭제<br>
+    · 급여 요약에서 실지급 급여 자동 계산<br>
+    · 수습 체크 시 시급 90% 적용
+  </div>
+</div>
+<div class="card" style="padding:14px;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">📊 급여대장 탭</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 전직원 급여 한눈에 확인<br>
+    · 년/월 선택으로 과거 급여 조회<br>
+    · 직원 이름 클릭 시 급여명세서 확인<br>
+    · 이미지 저장 / 문자 전송 가능<br>
+    · 전직원 지급 총액 자동 계산
+  </div>
+</div>
+<div class="card" style="padding:14px;">
+  <div style="font-size:15px;font-weight:700;color:var(--acc);margin-bottom:14px;">💾 데이터 관리</div>
+  <div style="font-size:12px;line-height:1.9;color:var(--txt);">
+    · 데이터는 내 기기에 저장됩니다<br>
+    · 브라우저 데이터 삭제 시 모든 정보 삭제<br>
+    · <b style="color:var(--bad);">중요: 정기적으로 급여대장 엑셀 백업 권장</b><br><br>
+    <b>📲 앱 설치 방법</b><br>
+    · Chrome에서 페이지 열기<br>
+    · 우측 상단 ⋮ 메뉴 클릭<br>
+    · "홈 화면에 추가" 선택<br>
+    · 홈화면 아이콘으로 실행 시 주소창 없이 앱처럼 사용
+  </div>
+</div>
+</div>
+
+
+</div>
+</div>
+</div>
+<div id="settingSaveBar" style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1.5px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:50;display:none;">
+  <button class="btn btn-green" onclick="saveSettings()">설정 저장</button>
+</div>
+
+<!-- 알바앱 -->
+<div id="workerApp" style="display:none;">
+<div class="hdr" style="background:linear-gradient(180deg,#43a047 0%,#2e7d32 60%,#1b5e20 100%);">
+<h1>알바앱</h1>
+<div onclick="logout()" style="cursor:pointer;font-size:11px;color:rgba(255,255,255,0.8);">로그아웃</div>
+</div>
+<div style="padding:14px;padding-bottom:100px;">
+<div class="card" id="nameCard" style="display:none;padding:10px;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div style="background:linear-gradient(180deg,#e3f2fd 0%,#bbdefb 100%);border-radius:10px;padding:10px 14px;text-align:center;border:1.5px solid #90caf9;white-space:nowrap;flex-shrink:0;box-shadow:0 4px 0 #64b5f6;">
+      <div id="nameView" style="font-size:15px;font-weight:700;color:#1565c0;"></div>
+    </div>
+    <div style="background:linear-gradient(180deg,#e8f5e9 0%,#c8e6c9 100%);border-radius:10px;padding:10px 14px;text-align:center;border:1.5px solid #a5d6a7;flex:1;min-width:0;box-shadow:0 4px 0 #81c784;">
+      <div id="wpView" style="font-size:14px;font-weight:700;color:#2e7d32;word-break:keep-all;"></div>
+    </div>
+    <button id="changeWpBtn" onclick="showWpPopup()" style="display:none;padding:10px 12px;border-radius:10px;border:none;background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 4px 0 #e65100;white-space:nowrap;flex-shrink:0;">지점선택</button>
+  </div>
+</div>
+<div class="card">
+  <div style="position:relative;display:flex;justify-content:center;align-items:center;margin-bottom:10px;">
+    <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px;">
+      <button class="btn-sm btn-sm-green" onclick="wPrevMonth()" style="padding:6px 10px;font-size:13px;">&#9664;</button>
+      <span id="wCalTitleText">2026년 6월</span>
+      <button class="btn-sm btn-sm-green" onclick="wNextMonth()" style="padding:6px 10px;font-size:13px;">&#9654;</button>
+    </div>
+    <button id="wSelDelBtn" onclick="wStartSelectDel()" style="display:none;position:absolute;right:0;padding:5px 8px;border-radius:8px;border:none;font-size:10px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#ffa726 0%,#f57c00 100%);color:#fff;box-shadow:0 2px 0 #e65100;">선택삭제</button>
+  </div>
+  <div id="wSelDelBar" style="display:none;margin-bottom:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button onclick="wConfirmSelectDel()" style="padding:7px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#ef5350 0%,#c62828 100%);color:#fff;box-shadow:0 3px 0 #7f0000;">삭제(<span id="wSelCount">0</span>일)</button>
+      <button onclick="wCancelSelectDel()" style="padding:7px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:var(--sur2);color:var(--txt);">취소</button>
+    </div>
+  </div>
+  <div class="cal" id="wCalendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+</div>
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14px;">
+    <span>총 근무시간</span>
+    <span id="wTotalHours" style="color:var(--good);font-family:'DM Mono',monospace;">0.00h</span>
+  </div>
+</div>
+</div>
+<div class="send-bar"><button class="btn btn-green" onclick="wSendToManager()">사장앱으로 전송</button></div>
+</div>
+
+
+
+<!-- 사장앱 모달 -->
+<div class="modal" id="wpModal">
+<div class="modal-content">
+<div class="modal-title">근무처 추가</div>
+<div class="form-field">
+<label>근무처명</label>
+<input type="text" id="wpName"/>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;">
+<button class="confirm-btn confirm-btn-confirm" onclick="saveWorkplace()" style="background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);box-shadow:0 3px 0 #0d3c7a;">저장</button>
+<button class="confirm-btn confirm-btn-cancel" onclick="closeModal('wpModal')">취소</button>
+</div>
+</div>
+</div>
+
+<div class="modal" id="workModal">
+<div class="modal-content" style="padding:18px 16px;">
+<div class="modal-title" id="workTitle">근무 입력</div>
+<input type="hidden" id="workDate"/>
+<input type="hidden" id="workIdx"/>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+  <div id="npStartBox" onclick="npSetActive('start')" style="text-align:center;padding:10px 6px;background:#e3f2fd;border:2.5px solid #1a73e8;border-radius:10px;cursor:pointer;">
+    <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:3px;">출근</div>
+    <div id="npStartText" style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:#1a73e8;letter-spacing:2px;">09:00</div>
+  </div>
+  <div id="npEndBox" onclick="npSetActive('end')" style="text-align:center;padding:10px 6px;background:#fff;border:2.5px solid var(--bdr);border-radius:10px;cursor:pointer;">
+    <div style="font-size:10px;font-weight:700;color:var(--mut);margin-bottom:3px;">퇴근</div>
+    <div id="npEndText" style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--txt);letter-spacing:2px;">18:00</div>
+  </div>
+</div>
+<div style="text-align:center;height:22px;margin-bottom:6px;">
+  <span id="npBuffer" style="font-size:18px;font-family:'DM Mono',monospace;font-weight:700;color:var(--warn);letter-spacing:4px;"></span>
+  <span id="npHint" style="font-size:11px;color:var(--mut);"></span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:210px;margin:0 auto 10px auto;">
+  <button class="numpad-btn" onclick="npPress(1)">1</button>
+  <button class="numpad-btn" onclick="npPress(2)">2</button>
+  <button class="numpad-btn" onclick="npPress(3)">3</button>
+  <button class="numpad-btn" onclick="npPress(4)">4</button>
+  <button class="numpad-btn" onclick="npPress(5)">5</button>
+  <button class="numpad-btn" onclick="npPress(6)">6</button>
+  <button class="numpad-btn" onclick="npPress(7)">7</button>
+  <button class="numpad-btn" onclick="npPress(8)">8</button>
+  <button class="numpad-btn" onclick="npPress(9)">9</button>
+  <button class="numpad-btn" style="background:#fff3e0;color:var(--warn);font-size:13px;" onclick="npClear()">C</button>
+  <button class="numpad-btn" onclick="npPress(0)">0</button>
+  <button class="numpad-btn" style="background:#fce4ec;color:var(--bad);font-size:16px;" onclick="npDel()">⌫</button>
+</div>
+<div id="existingWorks" class="work-list"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+<button class="confirm-btn confirm-btn-confirm" onclick="saveWork()" style="background:linear-gradient(180deg,#3d8ef0 0%,#1a73e8 100%);box-shadow:0 3px 0 #0d3c7a;">저장</button>
+<button class="confirm-btn confirm-btn-cancel" onclick="closeModal('workModal')">취소</button>
+</div>
+</div>
+</div>
+
+<div class="modal" id="payslipModal">
+<div class="modal-content">
+<div class="payslip" id="payslipContent"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:12px;">
+<button class="btn-sm btn-sm-green" onclick="savePayslipImage()">이미지 저장</button>
+<button class="btn-sm btn-sm-blue" onclick="sendPayslipImage()" id="sendImgBtn">이미지 전송</button>
+<button class="btn-sm btn-sm-red" onclick="closeModal('payslipModal')">닫기</button>
+</div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<div class="modal" id="empModal">
+<div class="modal-content">
+<div class="modal-title" id="empTitle">직원 추가</div>
+<input type="hidden" id="empIdx"/>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+  <div class="form-field" style="margin:0;"><label>이름 *</label><input type="text" id="empName"/></div>
+  <div class="form-field" style="margin:0;"><label>근무처 *</label><select id="empWp" style="width:100%;padding:10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;"></select></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+  <div class="form-field" style="margin:0;"><label>전화번호</label><input type="tel" id="empPhone"/></div>
+  <div class="form-field" style="margin:0;"><label>시급 *</label><input type="number" id="empWage"/></div>
+</div>
+<div class="form-field"><label>주소</label><input type="text" id="empAddress"/></div>
+<div class="form-field"><label>계좌번호</label><input type="text" id="empAccount"/></div>
+<div style="margin:10px 0 6px;font-size:11px;font-weight:700;color:var(--mut);">기본 출퇴근 시간</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+  <div><div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px;text-align:center;">출근</div>
+  <div id="empNpStartBox" onclick="empNpSetActive('start')" style="text-align:center;padding:8px 6px;background:#e3f2fd;border:2.5px solid #1a73e8;border-radius:10px;cursor:pointer;">
+    <div id="empNpStartText" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:#1a73e8;letter-spacing:2px;">09:00</div>
+  </div></div>
+  <div><div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px;text-align:center;">퇴근</div>
+  <div id="empNpEndBox" onclick="empNpSetActive('end')" style="text-align:center;padding:8px 6px;background:#fff;border:2.5px solid var(--bdr);border-radius:10px;cursor:pointer;">
+    <div id="empNpEndText" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--txt);letter-spacing:2px;">18:00</div>
+  </div></div>
+</div>
+<div style="text-align:center;height:18px;margin-bottom:4px;">
+  <span id="empNpBuffer" style="font-size:15px;font-family:'DM Mono',monospace;font-weight:700;color:var(--warn);letter-spacing:4px;"></span>
+  <span id="empNpHint" style="font-size:11px;color:var(--mut);"></span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:280px;margin:0 auto 10px;">
+  <button class="np-btn" onclick="empNpPress(1)">1</button><button class="np-btn" onclick="empNpPress(2)">2</button><button class="np-btn" onclick="empNpPress(3)">3</button>
+  <button class="np-btn" onclick="empNpPress(4)">4</button><button class="np-btn" onclick="empNpPress(5)">5</button><button class="np-btn" onclick="empNpPress(6)">6</button>
+  <button class="np-btn" onclick="empNpPress(7)">7</button><button class="np-btn" onclick="empNpPress(8)">8</button><button class="np-btn" onclick="empNpPress(9)">9</button>
+  <button class="np-btn np-c" onclick="empNpClear()">C</button><button class="np-btn" onclick="empNpPress(0)">0</button><button class="np-btn np-del" onclick="empNpDel()">⌫</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+  <button class="btn btn-blue" onclick="saveEmployee()">저장</button>
+  <button class="confirm-btn" style="background:linear-gradient(180deg,#78909c 0%,#546e7a 100%);color:#fff;box-shadow:0 3px 0 #263238;" onclick="closeModal('empModal')">닫기</button>
+</div>
+</div>
+</div>
+
+
+
+<!-- 알바앱 모달 -->
+
+<div class="confirm-modal" id="wpPopup">
+<div class="confirm-box" style="max-width:300px;">
+  <div class="confirm-title">근무지 선택</div>
+  <div id="wpPopupList" style="margin-bottom:16px;"></div>
+  <button class="confirm-btn confirm-btn-cancel" onclick="closeModal('wpPopup')" style="width:100%;">취소</button>
+</div>
+</div>
+
+<!-- 공용 -->
+<div class="confirm-modal" id="confirmModal">
+<div class="confirm-box">
+<div class="confirm-title" id="confirmTitle">확인</div>
+<div class="confirm-message" id="confirmMessage">진행하시겠습니까?</div>
+<div class="confirm-buttons" id="confirmButtons">
+<button class="confirm-btn confirm-btn-cancel" onclick="confirmNo()">취소</button>
+<button class="confirm-btn confirm-btn-confirm" onclick="confirmYes()">확인</button>
+</div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let appMode='';
+
+function loginBoss(){
+  appMode='boss';
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('bossApp').style.display='block';
+  initBoss();
+}
+
+function loginWorker(){
+  appMode='worker';
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('workerApp').style.display='block';
+  initWorker();
+}
+
+function logout(){
+  appMode='';
+  document.getElementById('bossApp').style.display='none';
+  document.getElementById('workerApp').style.display='none';
+  document.getElementById('settingSaveBar').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+function showWorkerLogin(){
+  var saved=localStorage.getItem('alba_saved_phone');
+  if(saved){loginWorker();return;}
+  document.getElementById('workerLoginBox').style.display='flex';
+  document.getElementById('loginPhoneInput').value='';
+  document.getElementById('loginPhoneMsg').textContent='';
+}
+
+function hideWorkerLogin(){
+  document.getElementById('workerLoginBox').style.display='none';
+}
+
+function doWorkerLogin(){
+  var phone=document.getElementById('loginPhoneInput').value.replace(/[^0-9]/g,'');
+  if(phone.length<9){document.getElementById('loginPhoneMsg').textContent='전화번호를 정확히 입력하세요';return;}
+  document.getElementById('loginPhoneMsg').textContent='확인 중...';
+  var check=function(list){
+    var f=list.find(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== phone;});
+    if(f){localStorage.setItem('alba_saved_phone',phone);hideWorkerLogin();loginWorker();}
+    else{document.getElementById('loginPhoneMsg').textContent='등록된 번호가 없습니다. 사장님께 문의하세요.';}
+  };
+  if(window._fbGet&&window._fbRef&&window._fbDb){
+    window._fbGet(window._fbRef(window._fbDb,'alba_employees')).then(function(snap){
+      if(snap.exists()){check(Object.values(snap.val()));}
+      else{document.getElementById('loginPhoneMsg').textContent='등록된 직원이 없습니다.';}
+    }).catch(function(){check(JSON.parse(localStorage.getItem('alba_emp')||'[]'));});
+  }else{check(JSON.parse(localStorage.getItem('alba_emp')||'[]'));}
+}
+
+window.onload=function(){
+  var saved=localStorage.getItem('alba_saved_phone');
+  if(saved){loginWorker();}
+};
+
+
+const ST={WP:'alba_wp',EMP:'alba_emp',SET:'alba_set',REC:'alba_rec',PIN:'alba_pin',PIN_ENABLED:'alba_pin_enabled'};
+let curTab=0,curEmp=null,curDate=new Date(),curWorkDate='',editWorkIdx=-1;
+let currentPin='',isSettingPin=false,confirmPin='';
+
+function checkLock(){
+const pinEnabled=localStorage.getItem(ST.PIN_ENABLED);
+const lockScreen=document.getElementById('lockScreen');
+if(pinEnabled!=='true'){
+if(lockScreen){
+lockScreen.remove();
+}
+return;
+}
+const savedPin=localStorage.getItem(ST.PIN);
+if(!savedPin){
+if(lockScreen){
+lockScreen.remove();
+}
+return;
+}
+if(lockScreen){
+lockScreen.style.display='flex';
+}
+}
+
+function togglePinLock(){
+const enabled=document.getElementById('usePinLock').checked;
+if(enabled){
+if(!localStorage.getItem(ST.PIN)){
+createLockScreen();
+isSettingPin=true;
+confirmPin='';
+currentPin='';
+updatePinDots();
+document.getElementById('lockTitle').textContent='비밀번호 설정';
+document.getElementById('lockSubtitle').textContent='사용할 4자리 숫자를 입력하세요';
+document.getElementById('lockScreen').style.display='flex';
+}else{
+localStorage.setItem(ST.PIN_ENABLED,'true');
+document.getElementById('changePinBtn').style.display='block';
+showToast('비밀번호 잠금이 활성화되었습니다');
+}
+}else{
+customConfirm('비밀번호 해제','비밀번호 잠금을 해제하시겠습니까?',()=>{
+localStorage.setItem(ST.PIN_ENABLED,'false');
+document.getElementById('changePinBtn').style.display='none';
+const lockScreen=document.getElementById('lockScreen');
+if(lockScreen){
+lockScreen.remove();
+}
+showToast('비밀번호 잠금이 해제되었습니다');
+});
+}
+}
+
+function createLockScreen(){
+if(document.getElementById('lockScreen'))return;
+const html=`
+`;
+document.body.insertAdjacentHTML('beforeend',html);
+}
+
+function loadPinSettings(){
+const pinEnabled=localStorage.getItem(ST.PIN_ENABLED);
+const hasPIN=localStorage.getItem(ST.PIN);
+if(pinEnabled==='true'&&hasPIN){
+document.getElementById('usePinLock').checked=true;
+document.getElementById('changePinBtn').style.display='block';
+}else{
+document.getElementById('usePinLock').checked=false;
+document.getElementById('changePinBtn').style.display='none';
+}
+}
+
+function addPin(num){
+if(currentPin.length>=4)return;
+currentPin+=num;
+updatePinDots();
+if(currentPin.length===4){
+setTimeout(verifyPin,100);
+}
+}
+
+function deletePin(){
+currentPin=currentPin.slice(0,-1);
+updatePinDots();
+document.getElementById('pinError').textContent='';
+}
+
+function updatePinDots(){
+for(let i=1;i<=4;i++){
+const dot=document.getElementById('dot'+i);
+dot.classList.toggle('filled',i<=currentPin.length);
+}
+}
+
+function verifyPin(){
+const savedPin=localStorage.getItem(ST.PIN);
+if(isSettingPin){
+if(!confirmPin){
+confirmPin=currentPin;
+currentPin='';
+updatePinDots();
+document.getElementById('lockTitle').textContent='비밀번호 확인';
+document.getElementById('lockSubtitle').textContent='한번 더 입력하세요';
+}else{
+if(currentPin===confirmPin){
+localStorage.setItem(ST.PIN,currentPin);
+localStorage.setItem(ST.PIN_ENABLED,'true');
+document.getElementById('lockScreen').style.display='none';
+document.getElementById('usePinLock').checked=true;
+document.getElementById('changePinBtn').style.display='block';
+showToast('비밀번호가 설정되었습니다');
+isSettingPin=false;
+confirmPin='';
+}else{
+document.getElementById('pinError').textContent='비밀번호가 일치하지 않습니다';
+currentPin='';
+confirmPin='';
+updatePinDots();
+document.getElementById('lockTitle').textContent='비밀번호 설정';
+document.getElementById('lockSubtitle').textContent='사용할 4자리 숫자를 입력하세요';
+}
+}
+}else{
+if(currentPin===savedPin){
+document.getElementById('lockScreen').style.display='none';
+}else{
+document.getElementById('pinError').textContent='비밀번호가 틀렸습니다';
+currentPin='';
+updatePinDots();
+}
+}
+}
+
+function changePin(){
+const savedPin=localStorage.getItem(ST.PIN);
+if(!savedPin){
+customAlert('오류','먼저 비밀번호를 설정하세요');
+return;
+}
+customConfirm('비밀번호 변경','새 비밀번호를 설정하시겠습니까?',()=>{
+createLockScreen();
+isSettingPin=true;
+confirmPin='';
+currentPin='';
+updatePinDots();
+document.getElementById('lockTitle').textContent='새 비밀번호 설정';
+document.getElementById('lockSubtitle').textContent='사용할 4자리 숫자를 입력하세요';
+document.getElementById('pinError').textContent='';
+document.getElementById('lockScreen').style.display='flex';
+});
+}
+
+
+function goTab(n){curTab=n;document.getElementById('slider').style.transform=`translateX(-${n*20}%)`;document.querySelectorAll('.tdot').forEach((d,i)=>d.classList.toggle('on',i===n));if(n===2){loadEmpSelect();renderCal();}if(n===3)loadPayroll();const saveBar=document.getElementById('settingSaveBar');if(saveBar)saveBar.style.display=n===0?'block':'none';}
+
+let startX=0,curX=0,dragging=false,startY=0,curY=0,isDragged=false;
+const sw=document.getElementById('swiper'),sl=document.getElementById('slider');
+sw.addEventListener('touchstart',e=>{
+const target=e.target;
+const tagName=target.tagName;
+if(tagName==='BUTTON'||tagName==='INPUT'||tagName==='SELECT'||tagName==='TEXTAREA'){
+return;
+}
+if(target.classList.contains('btn')||target.classList.contains('btn-sm')||target.classList.contains('pin-key')||target.closest('.btn')||target.closest('.btn-sm')||target.closest('.pin-key')){
+return;
+}
+startX=e.touches[0].clientX;
+startY=e.touches[0].clientY;
+dragging=true;
+isDragged=false;
+},{passive:true});
+sw.addEventListener('touchmove',e=>{
+if(!dragging)return;
+curX=e.touches[0].clientX;
+curY=e.touches[0].clientY;
+const diffX=Math.abs(curX-startX);
+const diffY=Math.abs(curY-startY);
+if(diffY>diffX){
+dragging=false;
+return;
+}
+if(diffX>20){
+isDragged=true;
+e.preventDefault();
+const diff=curX-startX;
+const base=-curTab*20;
+const pct=(diff/window.innerWidth)*20;
+sl.style.transition='none';
+sl.style.transform=`translateX(${base+pct}%)`;
+}
+},{passive:false});
+sw.addEventListener('touchend',()=>{
+if(!dragging)return;
+dragging=false;
+if(!isDragged){
+return;
+}
+const diff=curX-startX;
+sl.style.transition='transform .35s cubic-bezier(0.4,0,0.2,1)';
+if(diff>50&&curTab>0){
+goTab(curTab-1);
+}else if(diff<-50&&curTab<4){
+goTab(curTab+1);
+}else{
+sl.style.transform=`translateX(-${curTab*20}%)`;
+}
+},{passive:true});
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2000);}
+
+let confirmCallback=null;
+function customConfirm(title,message,onYes){
+document.getElementById('confirmTitle').textContent=title;
+document.getElementById('confirmMessage').textContent=message;
+document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn confirm-btn-cancel" onclick="confirmNo()">취소</button><button class="confirm-btn confirm-btn-confirm" onclick="confirmYes()">확인</button>';
+confirmCallback=onYes;
+document.getElementById('confirmModal').style.display='flex';
+}
+
+function customAlert(title,message){
+document.getElementById('confirmTitle').textContent=title;
+document.getElementById('confirmMessage').textContent=message;
+document.getElementById('confirmButtons').innerHTML='<button class="confirm-btn confirm-btn-ok" onclick="confirmNo()">확인</button>';
+confirmCallback=null;
+document.getElementById('confirmModal').style.display='flex';
+}
+
+function confirmYes(){
+document.getElementById('confirmModal').style.display='none';
+if(confirmCallback)confirmCallback();
+confirmCallback=null;
+}
+
+function confirmNo(){
+document.getElementById('confirmModal').style.display='none';
+confirmCallback=null;
+}
+
+window.onload=()=>{
+const now=new Date();
+document.getElementById('payYear').value=now.getFullYear();
+document.getElementById('payMonth').value=now.getMonth()+1;
+checkLock();loadWp();loadEmp();renderIns();loadEmpSelect();renderCal();loadPayroll();loadPinSettings();
+const saveBar=document.getElementById('settingSaveBar');if(saveBar)saveBar.style.display='block';
+};
+
+function loadWp(){
+const wps=JSON.parse(localStorage.getItem(ST.WP)||'[]');
+const c=document.getElementById('workplaceList');
+if(!wps.length){c.innerHTML='<p style="text-align:center;color:var(--mut);padding:20px 0;font-size:12px;">등록된 근무처가 없습니다</p>';return;}
+c.innerHTML=wps.map((w,i)=>`<div class="list-item"><span style="font-size:13px;font-weight:600;">${w.name}</span><button class="btn-sm btn-sm-red" onclick="delWp(${i})">삭제</button></div>`).join('');
+}
+
+function showWorkplaceModal(){document.getElementById('wpName').value='';document.getElementById('wpModal').style.display='flex';}
+
+function saveWorkplace(){
+const name=document.getElementById('wpName').value.trim();
+if(!name)return customAlert('입력 오류','근무처명을 입력하세요');
+const wps=JSON.parse(localStorage.getItem(ST.WP)||'[]');
+wps.push({name});
+localStorage.setItem(ST.WP,JSON.stringify(wps));
+closeModal('wpModal');
+loadWp();
+loadEmpWpSelect();
+showToast('근무처가 추가되었습니다');
+}
+
+function delWp(i){
+customConfirm('근무처 삭제','정말 삭제하시겠습니까?',()=>{
+const wps=JSON.parse(localStorage.getItem(ST.WP)||'[]');
+wps.splice(i,1);
+localStorage.setItem(ST.WP,JSON.stringify(wps));
+loadWp();
+showToast('근무처가 삭제되었습니다');
+});
+}
+
+function loadEmp(){
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const c=document.getElementById('employeeList');
+if(!emps.length){c.innerHTML='<p style="text-align:center;color:var(--mut);padding:20px 0;font-size:12px;">등록된 직원이 없습니다</p>';return;}
+c.innerHTML=emps.map((e,i)=>{
+return`<div class="list-item"><div><div style="font-size:14px;font-weight:700;">${e.name}</div><div style="font-size:11px;color:var(--mut);">${e.wp}</div></div><div style="display:flex;gap:6px;"><button class="btn-sm btn-sm-blue" onclick="editEmp(${i})">수정</button><button class="btn-sm btn-sm-red" onclick="delEmp(${i})">삭제</button></div></div>`;
+}).join('');
+}
+
+// 직원 코드 생성 (알바생앱과 동일한 방식)
+function genEmpCode(name,wp){
+let hash=0;const str=name+wp;
+for(let i=0;i<str.length;i++)hash=((hash<<5)-hash)+str.charCodeAt(i);
+return Math.abs(hash).toString(36).toUpperCase().substring(0,4).padEnd(4,'0');
+}
+
+// 알바생앱 잠금 해제
+function unlockWorker(name,code){
+customConfirm('잠금 해제',`${name}님의 알바생앱 이름 선택을 초기화합니까?`,()=>{
+if(!window._fbDb||!window._fbRef||!window._fbPush){
+customAlert('오류','Firebase 연결이 필요합니다');return;
+}
+window._fbPush(window._fbRef(window._fbDb,'alba_unlock'),{code,name,at:new Date().toISOString()})
+.then(()=>showToast(`${name}님 알바생앱 잠금이 해제됩니다`))
+.catch(()=>customAlert('오류','잠금 해제 전송 실패'));
+});
+}
+
+function showEmployeeModal(){
+document.getElementById('empIdx').value='';
+document.getElementById('empTitle').textContent='직원 추가';
+document.getElementById('empName').value='';
+document.getElementById('empWage').value='';
+document.getElementById('empPhone').value='';
+document.getElementById('empPin').value='';
+document.getElementById('empAddress').value='';
+document.getElementById('empAccount').value='';
+empNpState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+empNpRender();
+loadEmpWpSelect();
+document.getElementById('empModal').style.display='flex';
+}
+
+function loadEmpWpSelect(){
+const wps=JSON.parse(localStorage.getItem(ST.WP)||'[]');
+const s=document.getElementById('empWp');
+s.innerHTML='<option value="">선택</option>'+wps.map(w=>`<option>${w.name}</option>`).join('');
+}
+
+function editEmp(i){
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const e=emps[i];
+document.getElementById('empIdx').value=i;
+document.getElementById('empTitle').textContent='직원 수정';
+document.getElementById('empName').value=e.name;
+document.getElementById('empWage').value=e.wage;
+document.getElementById('empPhone').value=e.phone||'';
+document.getElementById('empAddress').value=e.address||'';
+document.getElementById('empAccount').value=e.account||'';
+document.getElementById('empPin').value=e.pin||'';
+// 기존 출퇴근 시간을 숫자패드로 표시
+const sv=e.startTime?e.startTime.replace(':',''):'0900';
+const ev=e.endTime?e.endTime.replace(':',''):'1800';
+empNpState={active:'start',startVal:sv,endVal:ev,buf:''};
+empNpRender();
+loadEmpWpSelect();
+document.getElementById('empWp').value=e.wp;
+document.getElementById('empModal').style.display='flex';
+}
+
+function saveEmployee(){
+const idx=document.getElementById('empIdx').value;
+const name=document.getElementById('empName').value.trim();
+const wp=document.getElementById('empWp').value;
+const wage=parseInt(document.getElementById('empWage').value);
+const phone=document.getElementById('empPhone').value.trim();
+const pin=document.getElementById('empPin').value.trim();
+const address=document.getElementById('empAddress').value.trim();
+const account=document.getElementById('empAccount').value.trim();
+// 숫자패드에서 시간 읽기
+const ssv=empNpState.startVal.padStart(4,'0');
+const sev=empNpState.endVal.padStart(4,'0');
+const startTime=`${ssv.substring(0,2)}:${ssv.substring(2,4)}`;
+const endTime=`${sev.substring(0,2)}:${sev.substring(2,4)}`;
+if(!name||!wp||!wage)return customAlert('입력 오류','필수 항목을 입력하세요');
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+if(idx==='')emps.push(emp);
+else emps[idx]=emp;
+localStorage.setItem(ST.EMP,JSON.stringify(emps));
+// Firebase에 직원 목록 동기화 (알바생앱에서 이름 선택용)
+syncEmpsToFirebase(emps);
+closeModal('empModal');
+loadEmp();
+loadEmpSelect();
+showToast(idx===''?'직원이 추가되었습니다':'직원 정보가 수정되었습니다');
+}
+
+function delEmp(i){
+customConfirm('직원 삭제','정말 삭제하시겠습니까?',()=>{
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+emps.splice(i,1);
+localStorage.setItem(ST.EMP,JSON.stringify(emps));
+syncEmpsToFirebase(emps);
+loadEmp();
+showToast('직원이 삭제되었습니다');
+});
+}
+
+// 알바생앱용 직원 목록 Firebase 동기화
+function syncEmpsToFirebase(emps){
+if(!window._fbDb||!window._fbRef||!window._fbSet)return;
+const simplified=emps.map(e=>({name:e.name,wp:e.wp||'',phone:e.phone||'',pin:e.pin||'',startTime:e.startTime||'09:00',endTime:e.endTime||'18:00'}));
+window._fbSet(window._fbRef(window._fbDb,'alba_employees'),simplified).catch(()=>{});
+}
+
+function renderIns(){
+const ins=[{id:'pension',name:'국민연금',rate:4.75},{id:'health',name:'건강보험',rate:3.595},{id:'care',name:'장기요양',rate:13.14},{id:'employment',name:'고용보험',rate:0.9}];
+const settings=getSettings();
+document.getElementById('insuranceGrid').innerHTML=ins.map(i=>{
+const saved=settings.insurance&&settings.insurance[i.id]?settings.insurance[i.id]:{enabled:true,rate:i.rate};
+return`<div style="display:flex;align-items:center;gap:4px;padding:6px;background:var(--sur2);border-radius:6px;margin-bottom:4px;"><input type="checkbox" id="ins_${i.id}" ${saved.enabled?'checked':''} style="width:14px;height:14px;"><label for="ins_${i.id}" style="flex:1;font-size:10px;font-weight:600;">${i.name}</label><input type="number" id="rate_${i.id}" value="${saved.rate}" step="0.001" style="width:50px;padding:3px;border:1px solid var(--bdr);border-radius:4px;font-size:10px;text-align:center;"><span style="font-size:9px;color:var(--mut);">%</span></div>`;
+}).join('');
+}
+
+function saveSettings(){
+const settings={
+minWage:parseInt(document.getElementById('minWage').value),
+weeklyThreshold:parseInt(document.getElementById('weeklyThreshold').value),
+weeklyEnabled:document.getElementById('weeklyAllowanceEnabled').checked,
+weekStartDay:parseInt(document.getElementById('weekStartDay').value),
+weekEndDay:parseInt(document.getElementById('weekEndDay').value),
+insurance:{
+pension:{enabled:document.getElementById('ins_pension').checked,rate:parseFloat(document.getElementById('rate_pension').value)},
+health:{enabled:document.getElementById('ins_health').checked,rate:parseFloat(document.getElementById('rate_health').value)},
+care:{enabled:document.getElementById('ins_care').checked,rate:parseFloat(document.getElementById('rate_care').value)},
+employment:{enabled:document.getElementById('ins_employment').checked,rate:parseFloat(document.getElementById('rate_employment').value)}
+}
+};
+localStorage.setItem(ST.SET,JSON.stringify(settings));
+showToast('설정이 저장되었습니다');
+}
+
+function getSettings(){
+const def={minWage:10320,weeklyThreshold:15,weeklyEnabled:true,weekStartDay:1,weekEndDay:0,insurance:{pension:{enabled:true,rate:4.75},health:{enabled:true,rate:3.595},care:{enabled:true,rate:13.14},employment:{enabled:true,rate:0.9}}};
+const saved=localStorage.getItem(ST.SET);
+if(saved){
+const parsed=JSON.parse(saved);
+document.getElementById('minWage').value=parsed.minWage||def.minWage;
+document.getElementById('weeklyThreshold').value=parsed.weeklyThreshold||def.weeklyThreshold;
+document.getElementById('weeklyAllowanceEnabled').checked=parsed.weeklyEnabled!==false;
+if(parsed.weekStartDay!==undefined)document.getElementById('weekStartDay').value=parsed.weekStartDay;
+if(parsed.weekEndDay!==undefined)document.getElementById('weekEndDay').value=parsed.weekEndDay;
+return parsed;
+}
+return def;
+}
+
+function loadEmpSelect(){
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const s=document.getElementById('empSelect');
+s.innerHTML='<option value="">직원 선택</option>'+emps.map((e,i)=>`<option value="${i}">${e.name}</option>`).join('');
+}
+
+function selectEmp(){
+const i=document.getElementById('empSelect').value;
+renderCal();
+calcSum();
+}
+
+function prevMonth(){curDate.setMonth(curDate.getMonth()-1);renderCal();calcSum();}
+function nextMonth(){curDate.setMonth(curDate.getMonth()+1);renderCal();calcSum();}
+
+// 선택삭제 관련
+let selDelMode=false;
+let selDelDates=new Set();
+
+function startSelectDel(){
+  selDelMode=true;
+  selDelDates=new Set();
+  document.getElementById('selectDelBtn').style.display='none';
+  document.getElementById('selectDelBar').style.display='block';
+  document.getElementById('selCount').textContent='0';
+  renderCal();
+}
+
+function cancelSelectDel(){
+  selDelMode=false;
+  selDelDates=new Set();
+  document.getElementById('selectDelBar').style.display='none';
+  document.getElementById('selectDelBtn').style.display='block';
+  renderCal();
+}
+
+function toggleSelDate(ds){
+  if(!selDelMode)return;
+  if(selDelDates.has(ds))selDelDates.delete(ds);
+  else selDelDates.add(ds);
+  document.getElementById('selCount').textContent=selDelDates.size;
+  renderCal();
+}
+
+function confirmSelectDel(){
+  if(!selDelDates.size){showToast('삭제할 날짜를 선택하세요');return;}
+  customConfirm('근무 삭제',selDelDates.size+'일치 근무를 삭제하시겠습니까?',()=>{
+    const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+    const filtered=recs.filter(r=>!(r.emp===curEmp.name&&selDelDates.has(r.date)));
+    localStorage.setItem(ST.REC,JSON.stringify(filtered));
+    cancelSelectDel();
+    calcSum();
+    showToast(selDelDates.size+'일치 근무가 삭제되었습니다');
+  });
+}
+
+function renderCal(){
+const y=curDate.getFullYear(),m=curDate.getMonth();
+document.getElementById('calTitleText').textContent=`${y}년 ${m+1}월`;
+const first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate();
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+let html='';
+['일','월','화','수','목','금','토'].forEach((d,i)=>html+=`<div class="cal-header" style="${i===0?'color:#ef5350':i===6?'color:#1976d2':''}">${d}</div>`);
+for(let i=0;i<first;i++)html+='<div></div>';
+const today=new Date();today.setHours(0,0,0,0);
+for(let d=1;d<=last;d++){
+const date=new Date(y,m,d);date.setHours(0,0,0,0);
+const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const works=curEmp?recs.filter(r=>r.emp===curEmp.name&&r.date===ds):[];
+let cls='cal-cell';
+if(date.getTime()===today.getTime())cls+=' today';
+if(works.length)cls+=' work';
+let onclick,badge='',extra='';
+if(selDelMode&&works.length){
+  const sel=selDelDates.has(ds);
+  extra=sel?'outline:3px solid #c62828;outline-offset:-2px;':'';
+  badge=sel?'<span style="position:absolute;top:1px;right:1px;background:#c62828;color:#fff;font-size:9px;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;">✓</span>':'';
+  onclick=`onclick="toggleSelDate('${ds}')"`;
+}else if(selDelMode){
+  onclick='style="cursor:default;opacity:0.4"';
+}else{
+  onclick=curEmp?`onclick="openWork('${ds}')"`:' style="cursor:default"';
+  badge=works.length>1?`<span class="work-badge">${works.length}</span>`:'';
+}
+html+=`<div class="${cls}" ${onclick} style="${extra}position:relative;"><div style="font-weight:700;font-size:12px;">${d}</div>${works.length?`<div style="font-size:9px;color:var(--acc);font-weight:700;">${works.reduce((s,w)=>s+w.hours,0).toFixed(1)}h</div>`:''} ${badge}</div>`;
+}
+document.getElementById('calendar').innerHTML=html;
+}
+
+function openWork(ds){
+if(!curEmp)return;
+curWorkDate=ds;
+editWorkIdx=-1;
+document.getElementById('workTitle').textContent=`${ds} 근무입력`;
+document.getElementById('workDate').value=ds;
+document.getElementById('workIdx').value='';
+// 직원 등록 시 설정한 출퇴근 시간을 디폴트로 사용
+const defStart=curEmp.startTime?curEmp.startTime.replace(':',''):'0900';
+const defEnd=curEmp.endTime?curEmp.endTime.replace(':',''):'1800';
+npState={active:'start',startVal:defStart,endVal:defEnd,buf:''};
+npRender();
+loadExistingWorks(ds);
+document.getElementById('workModal').style.display='flex';
+}
+
+function loadExistingWorks(ds){
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const works=recs.filter(r=>r.emp===curEmp.name&&r.date===ds);
+const c=document.getElementById('existingWorks');
+if(!works.length){c.innerHTML='';return;}
+c.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--mut);margin-top:10px;margin-bottom:6px;">등록된 근무</div>'+works.map((w,i)=>`<div class="work-item"><div><strong>${w.start} ~ ${w.end}</strong> (${w.hours}h)</div><div style="display:flex;gap:4px;"><button class="btn-sm btn-sm-warn" onclick="editWork('${ds}',${recs.indexOf(w)})">수정</button><button class="btn-sm btn-sm-red" onclick="deleteWork(${recs.indexOf(w)})">삭제</button></div></div>`).join('');
+}
+
+function editWork(ds,idx){
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const w=recs[idx];
+editWorkIdx=idx;
+document.getElementById('workIdx').value=idx;
+npState.startVal=w.start.replace(':','');
+npState.endVal=w.end.replace(':','');
+npState.buf='';
+npRender();
+}
+
+function deleteWork(idx){
+customConfirm('근무 삭제','이 근무 기록을 삭제하시겠습니까?',()=>{
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+recs.splice(idx,1);
+localStorage.setItem(ST.REC,JSON.stringify(recs));
+loadExistingWorks(curWorkDate);
+renderCal();
+calcSum();
+showToast('근무 기록이 삭제되었습니다');
+});
+}
+
+function saveWork(){
+const ds=document.getElementById('workDate').value;
+const idx=document.getElementById('workIdx').value;
+const sv=npState.startVal.padStart(4,'0');
+const ev=npState.endVal.padStart(4,'0');
+const sh=parseInt(sv.substring(0,2)),sm=parseInt(sv.substring(2,4));
+const eh=parseInt(ev.substring(0,2)),em2=parseInt(ev.substring(2,4));
+if(sh>23||sm>59||eh>23||em2>59)return customAlert('입력 오류','올바른 시간을 입력하세요 (24시간제)');
+const start=`${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`;
+const end=`${String(eh).padStart(2,'0')}:${String(em2).padStart(2,'0')}`;
+let mins=(eh*60+em2)-(sh*60+sm);
+if(mins<=0)mins+=1440;
+if(mins<=0)return customAlert('입력 오류','올바른 시간을 입력하세요');
+const hours=mins/60; // 소수 절사 없이 그대로 저장
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+if(idx===''){recs.push({emp:curEmp.name,date:ds,start,end,hours,wage});showToast('근무가 등록되었습니다');}
+else{recs[idx]={emp:curEmp.name,date:ds,start,end,hours,wage};showToast('근무가 수정되었습니다');}
+localStorage.setItem(ST.REC,JSON.stringify(recs));
+closeModal('workModal');
+renderCal();
+calcSum();
+}
+
+function calcSum(){
+if(!curEmp){
+document.getElementById('sumHours').textContent='0h';
+document.getElementById('sumBasic').textContent='0원';
+document.getElementById('sumWeekly').textContent='0원';
+document.getElementById('insPension').textContent='국민연금: 0원';
+document.getElementById('insHealth').textContent='건강보험: 0원';
+document.getElementById('insCare').textContent='장기요양: 0원';
+document.getElementById('insEmployment').textContent='고용보험: 0원';
+document.getElementById('sumNet').textContent='0원';
+return;
+}
+const y=curDate.getFullYear(),m=curDate.getMonth();
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const works=recs.filter(r=>{const d=new Date(r.date);return r.emp===curEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
+// ★ 개인별 수습 체크 우선
+const totalH=works.reduce((s,w)=>s+w.hours,0);
+// ★ 급여 계산 시 소수 완전 절사 (원 단위)
+const basic=Math.floor(totalH*wage);
+const settings=getSettings();
+// ★ 개인별 주휴 체크 우선 (전체설정 weeklyEnabled 무시)
+const weeklyEnabled=document.getElementById('calcWeeklyCheck').checked;
+const wc=calcWeeklyCount(works,y,m,settings,weeklyEnabled);
+const weekly=wc>0?Math.floor(wage*8)*wc:0;
+const gross=basic+weekly;
+const ins=settings.insurance;
+const pension=ins.pension.enabled?Math.floor(gross*ins.pension.rate/100):0;
+const health=ins.health.enabled?Math.floor(gross*ins.health.rate/100):0;
+const care=ins.care.enabled?Math.floor(health*ins.care.rate/100):0;
+const employment=ins.employment.enabled?Math.floor(gross*ins.employment.rate/100):0;
+const totalIns=pension+health+care+employment;
+const net=gross-totalIns;
+document.getElementById('sumHours').textContent=totalH.toFixed(2)+'h';
+document.getElementById('sumBasic').textContent=basic.toLocaleString()+'원';
+document.getElementById('sumWeekly').textContent=weekly.toLocaleString()+'원';
+document.getElementById('insPension').textContent='국민연금: '+pension.toLocaleString()+'원';
+document.getElementById('insHealth').textContent='건강보험: '+health.toLocaleString()+'원';
+document.getElementById('insCare').textContent='장기요양: '+care.toLocaleString()+'원';
+document.getElementById('insEmployment').textContent='고용보험: '+employment.toLocaleString()+'원';
+document.getElementById('sumNet').textContent=net.toLocaleString()+'원';
+}
+
+// ★ 주별 주휴수당 카운트 헬퍼
+// weeklyOverride: 개인별 체크 우선 (undefined면 settings.weeklyEnabled 사용)
+function calcWeeklyCount(works, y, m, settings, weeklyOverride){
+const enabled = (weeklyOverride !== undefined) ? weeklyOverride : settings.weeklyEnabled;
+if(!enabled) return 0;
+const ws=parseInt(settings.weekStartDay||1);
+const firstDay=new Date(y,m,1);
+const lastDay=new Date(y,m+1,0);
+const dayMap={};
+works.forEach(w=>{dayMap[w.date]=(dayMap[w.date]||0)+w.hours;});
+let count=0;
+const visited=new Set();
+let cur=new Date(firstDay);
+while(cur<=lastDay){
+const dayOfWeek=cur.getDay();
+const diffToStart=(dayOfWeek-ws+7)%7;
+const weekStart=new Date(cur);weekStart.setDate(cur.getDate()-diffToStart);
+const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
+const key=weekStart.toISOString().slice(0,10);
+if(!visited.has(key)){
+visited.add(key);
+let wkH=0;
+for(let d=new Date(Math.max(weekStart.getTime(),firstDay.getTime()));d<=weekEnd&&d<=lastDay;d.setDate(d.getDate()+1)){
+const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+wkH+=(dayMap[ds]||0);
+}
+if(wkH>=settings.weeklyThreshold)count++;
+}
+cur=new Date(weekEnd);cur.setDate(weekEnd.getDate()+1);
+}
+return count;
+}
+
+function loadPayroll(){
+const y=parseInt(document.getElementById('payYear').value),m=parseInt(document.getElementById('payMonth').value);
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const settings=getSettings();
+const weeklyChkEl=document.getElementById('calcWeeklyCheck');
+const weeklyOverride=weeklyChkEl?weeklyChkEl.checked:undefined;
+let html='<div style="font-size:13px;">';
+html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-weight:700;padding:10px;background:var(--acc);color:#fff;border-radius:8px 8px 0 0;font-size:13px;"><div>이름</div><div>근무시간</div><div>실지급</div></div>';
+let grandTotal=0;
+// 등록 직원 표시
+emps.forEach(e=>{
+const works=recs.filter(r=>{const d=new Date(r.date);return r.emp===e.name&&d.getFullYear()===y&&d.getMonth()===m-1;});
+const wage=probOverride?Math.floor(e.wage*0.9):e.wage;
+const h=works.reduce((s,w)=>s+w.hours,0);
+const basic=Math.floor(h*wage);
+const wc=calcWeeklyCount(works,y,m-1,settings,weeklyOverride);
+const weekly=wc>0?Math.floor(wage*8)*wc:0;
+const gross=basic+weekly;
+const ins=settings.insurance;
+const totalIns=(ins.pension.enabled?Math.floor(gross*ins.pension.rate/100):0)+(ins.health.enabled?Math.floor(gross*ins.health.rate/100):0)+(ins.care.enabled?Math.floor(Math.floor(gross*ins.health.rate/100)*ins.care.rate/100):0)+(ins.employment.enabled?Math.floor(gross*ins.employment.rate/100):0);
+const net=gross-totalIns;
+grandTotal+=net;
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px;border-bottom:1px solid var(--bdr);cursor:pointer;font-size:13px;" onclick="showPayslip('${e.name}',${y},${m})"><div style="font-weight:700;">${e.name}</div><div>${h.toFixed(2)}h</div><div style="color:var(--acc);font-weight:700;">${net.toLocaleString()}원</div></div>`;
+});
+// 빈 행 채우기 (최소 7행)
+const emptyRows=Math.max(0,7-emps.length);
+for(let i=0;i<emptyRows;i++){
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px;border-bottom:1px solid var(--bdr);font-size:13px;color:var(--bdr);"><div>-</div><div>-</div><div>-</div></div>`;
+}
+html+='</div>';
+html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;margin-top:10px;background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;border-radius:10px;box-shadow:0 3px 0 #0a2e0f,0 4px 8px rgba(0,0,0,.2);"><span style="font-size:14px;font-weight:700;">전직원 지급 총액</span><strong style="font-size:16px;font-family:'DM Mono',monospace;">${grandTotal.toLocaleString()}원</strong></div>`;
+document.getElementById('payrollTable').innerHTML=html;
+}
+
+function showPayslip(name,y,m){
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const e=emps.find(x=>x.name===name);
+if(!e)return;
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const works=recs.filter(r=>{const d=new Date(r.date);return r.emp===name&&d.getFullYear()===y&&d.getMonth()===m-1;});
+const h=works.reduce((s,w)=>s+w.hours,0);
+// ★ 급여 계산 시 소수 완전 절사
+const basic=Math.floor(h*wage);
+const settings=getSettings();
+// ★ 개인별 주휴 체크 우선
+const weeklyChkEl=document.getElementById('calcWeeklyCheck');
+const weeklyOverride=weeklyChkEl?weeklyChkEl.checked:undefined;
+const wc=calcWeeklyCount(works,y,m-1,settings,weeklyOverride);
+const weekly=wc>0?Math.floor(wage*8)*wc:0;
+const gross=basic+weekly;
+const ins=settings.insurance;
+const pension=ins.pension.enabled?Math.floor(gross*ins.pension.rate/100):0;
+const health=ins.health.enabled?Math.floor(gross*ins.health.rate/100):0;
+const care=ins.care.enabled?Math.floor(health*ins.care.rate/100):0;
+const employment=ins.employment.enabled?Math.floor(gross*ins.employment.rate/100):0;
+const totalIns=pension+health+care+employment;
+const net=gross-totalIns;
+const html=`
+<div class="modal-title">${y}년 ${m}월 급여명세서</div>
+<div class="payslip-section">
+<div class="payslip-row"><span style="color:var(--mut);">성명</span><strong>${name}</strong></div>
+<div class="payslip-row"><span style="color:var(--mut);">근무처</span><strong>${e.wp}</strong></div>
+${e.phone?`<div class="payslip-row"><span style="color:var(--mut);">연락처</span><strong>${e.phone}</strong></div>`:''}
+${e.account?`<div class="payslip-row"><span style="color:var(--mut);">계좌</span><strong>${e.account}</strong></div>`:''}
+</div>
+<div class="payslip-section">
+<div style="font-weight:700;margin-bottom:8px;color:var(--acc);">급여 내역</div>
+<div class="payslip-row"><span>총 근무시간</span><strong>${h.toFixed(1)}시간</strong></div>
+<div class="payslip-row"><span>시간급여</span><strong>${basic.toLocaleString()}원</strong></div>
+<div class="payslip-row"><span>주휴수당 (×${wc})</span><strong>${weekly.toLocaleString()}원</strong></div>
+<div class="payslip-row" style="padding-top:8px;border-top:1px solid var(--bdr);"><span style="font-weight:700;">지급총액</span><strong style="color:var(--acc);">${gross.toLocaleString()}원</strong></div>
+</div>
+<div class="payslip-section">
+<div style="font-weight:700;margin-bottom:8px;color:var(--bad);">공제 내역</div>
+${pension>0?`<div class="payslip-row"><span>국민연금 (${ins.pension.rate}%)</span><strong>-${pension.toLocaleString()}원</strong></div>`:''}
+${health>0?`<div class="payslip-row"><span>건강보험 (${ins.health.rate}%)</span><strong>-${health.toLocaleString()}원</strong></div>`:''}
+${care>0?`<div class="payslip-row"><span>장기요양 (${ins.care.rate}%)</span><strong>-${care.toLocaleString()}원</strong></div>`:''}
+${employment>0?`<div class="payslip-row"><span>고용보험 (${ins.employment.rate}%)</span><strong>-${employment.toLocaleString()}원</strong></div>`:''}
+<div class="payslip-row" style="padding-top:8px;border-top:1px solid var(--bdr);"><span style="font-weight:700;">공제총액</span><strong style="color:var(--bad);">-${totalIns.toLocaleString()}원</strong></div>
+</div>
+<div class="payslip-total">
+<div style="display:flex;justify-content:space-between;">
+<span>실지급액</span>
+<span>${net.toLocaleString()}원</span>
+</div>
+</div>
+`;
+document.getElementById('payslipContent').innerHTML=html;
+window.currentPayslipEmployee=e;
+window.currentPayslipData={name,y,m,net};
+document.getElementById('payslipModal').style.display='flex';
+}
+
+function exportExcel(){
+const y=parseInt(document.getElementById('payYear').value),m=parseInt(document.getElementById('payMonth').value);
+const emps=JSON.parse(localStorage.getItem(ST.EMP)||'[]');
+const recs=JSON.parse(localStorage.getItem(ST.REC)||'[]');
+const settings=getSettings();
+const data=[['이름','근무처','시급','근무시간','시간급여','주휴수당','지급총액','국민연금','건강보험','장기요양','고용보험','공제총액','실지급']];
+emps.forEach(e=>{
+const works=recs.filter(r=>{const d=new Date(r.date);return r.emp===e.name&&d.getFullYear()===y&&d.getMonth()===m-1;});
+const h=works.reduce((s,w)=>s+w.hours,0);
+const basic=Math.floor(h*wage/10)*10;
+const weeklyCount=Math.floor(h/settings.weeklyThreshold);
+const weekly=settings.weeklyEnabled&&h>=settings.weeklyThreshold?Math.floor(wage*8/10)*10*weeklyCount:0;
+const gross=basic+weekly;
+const ins=settings.insurance;
+const pension=ins.pension.enabled?Math.floor(gross*ins.pension.rate/100/10)*10:0;
+const health=ins.health.enabled?Math.floor(gross*ins.health.rate/100/10)*10:0;
+const care=ins.care.enabled?Math.floor(health*ins.care.rate/100/10)*10:0;
+const employment=ins.employment.enabled?Math.floor(gross*ins.employment.rate/100/10)*10:0;
+const totalIns=pension+health+care+employment;
+const net=gross-totalIns;
+data.push([e.name,e.wp,wage,h.toFixed(1)+'h',basic,weekly,gross,pension,health,care,employment,totalIns,net]);
+});
+const ws=XLSX.utils.aoa_to_sheet(data);
+const wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,'급여대장');
+XLSX.writeFile(wb,`급여대장_${y}년${m}월.xlsx`);
+showToast('엑셀 파일이 다운로드되었습니다');
+}
+
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+
+
+
+function showHelp(){goTab(4);}
+
+
+function savePayslipImage(){
+const payslip=document.getElementById('payslipContent');
+const modal=document.getElementById('payslipModal');
+const buttons=modal.querySelector('.btn-green').parentElement;
+buttons.style.display='none';
+html2canvas(payslip,{backgroundColor:'#ffffff',scale:2}).then(canvas=>{
+canvas.toBlob(blob=>{
+const url=URL.createObjectURL(blob);
+const link=document.createElement('a');
+link.href=url;
+link.download=`급여명세서_${window.currentPayslipData.name}_${window.currentPayslipData.y}년${window.currentPayslipData.m}월.png`;
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+URL.revokeObjectURL(url);
+buttons.style.display='grid';
+showToast('급여명세서가 저장되었습니다');
+setTimeout(()=>{
+document.getElementById('payslipModal').style.display='none';
+},3000);
+});
+});
+}
+
+function sendPayslipImage(){
+const emp=window.currentPayslipEmployee;
+const data=window.currentPayslipData;
+if(!emp||!emp.phone){
+customAlert('전송 불가','전화번호가 등록되어 있지 않습니다');
+return;
+}
+const payslip=document.getElementById('payslipContent');
+const modal=document.getElementById('payslipModal');
+const buttons=modal.querySelector('.btn-sm-green').parentElement;
+buttons.style.display='none';
+html2canvas(payslip,{backgroundColor:'#ffffff',scale:2}).then(canvas=>{
+canvas.toBlob(blob=>{
+buttons.style.display='grid';
+if(navigator.share&&navigator.canShare&&navigator.canShare({files:[new File([blob],'payslip.png',{type:'image/png'})]})){
+const file=new File([blob],`급여명세서_${data.name}_${data.y}년${data.m}월.png`,{type:'image/png'});
+navigator.share({
+title:'급여명세서',
+text:`${data.y}년 ${data.m}월 급여명세서\n실지급액: ${data.net.toLocaleString()}원`,
+files:[file]
+}).then(()=>showToast('전송되었습니다')).catch(err=>{
+if(err.name!=='AbortError'){
+fallbackSend(emp.phone,data);
+}
+});
+}else{
+fallbackSend(emp.phone,data);
+}
+});
+});
+}
+
+function fallbackSend(phone,data){
+const message=`[급여명세서]\n${data.y}년 ${data.m}월\n실지급액: ${data.net.toLocaleString()}원`;
+const smsUrl=`sms:${phone}?body=${encodeURIComponent(message)}`;
+window.location.href=smsUrl;
+showToast('문자 앱이 열립니다');
+}
+
+
+// ===== 직원등록 숫자패드 =====
+let empNpState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+function empNpSetActive(w){empNpState.active=w;empNpState.buf='';empNpRender();}
+function empNpPress(n){
+if(empNpState.buf.length>=4)return;
+empNpState.buf+=String(n);
+if(empNpState.buf.length===4){
+const h=parseInt(empNpState.buf.substring(0,2)),m=parseInt(empNpState.buf.substring(2,4));
+if(h>23||m>59){showToast('올바른 시간이 아닙니다');empNpState.buf='';}
+else{
+if(empNpState.active==='start'){empNpState.startVal=empNpState.buf;empNpState.active='end';}
+else{empNpState.endVal=empNpState.buf;empNpState.active='start';}
+empNpState.buf='';
+}
+}
+empNpRender();
+}
+function empNpDel(){empNpState.buf=empNpState.buf.slice(0,-1);empNpRender();}
+function empNpClear(){empNpState.buf='';empNpRender();}
+function empNpRender(){
+const st=empNpState;
+const isStart=st.active==='start';
+const sb=document.getElementById('empNpStartBox'),eb=document.getElementById('empNpEndBox');
+sb.style.background=isStart?'#e3f2fd':'#fff';
+sb.style.borderColor=isStart?'#1a73e8':'var(--bdr)';
+eb.style.background=!isStart?'#fff3e0':'#fff';
+eb.style.borderColor=!isStart?'#f57c00':'var(--bdr)';
+// 입력 중이면 박스 안에 실시간 표시
+const buf=st.buf;
+const hPart=buf.length>=1?buf.substring(0,Math.min(2,buf.length)).padEnd(2,'_'):'__';
+const mPart=buf.length>=3?buf.substring(2,4).padEnd(2,'_'):'__';
+const liveText=buf.length>0?hPart+':'+mPart:'';
+if(isStart){
+  document.getElementById('empNpStartText').textContent=liveText||npFmt(st.startVal);
+  document.getElementById('empNpStartText').style.color=buf.length>0?'var(--warn)':'#1a73e8';
+  document.getElementById('empNpEndText').textContent=npFmt(st.endVal);
+  document.getElementById('empNpEndText').style.color='var(--txt)';
+}else{
+  document.getElementById('empNpStartText').textContent=npFmt(st.startVal);
+  document.getElementById('empNpStartText').style.color='#1a73e8';
+  document.getElementById('empNpEndText').textContent=liveText||npFmt(st.endVal);
+  document.getElementById('empNpEndText').style.color=buf.length>0?'var(--warn)':'#f57c00';
+}
+document.getElementById('empNpBuffer').textContent='';
+document.getElementById('empNpHint').textContent=buf.length===0?(isStart?'출근 시간을 입력하세요':'퇴근 시간을 입력하세요'):'';
+}
+// ===== 직원등록 숫자패드 끝 =====
+
+// ===== 숫자패드 =====
+let npState={active:'start',startVal:'0900',endVal:'1800',buf:''};
+function npSetActive(w){npState.active=w;npState.buf='';npRender();}
+function npPress(n){
+if(npState.buf.length>=4)return;
+npState.buf+=String(n);
+if(npState.buf.length===4){
+const h=parseInt(npState.buf.substring(0,2)),m=parseInt(npState.buf.substring(2,4));
+if(h>23||m>59){showToast('올바른 시간이 아닙니다');npState.buf='';}
+else{
+if(npState.active==='start'){npState.startVal=npState.buf;npState.active='end';}
+else{npState.endVal=npState.buf;npState.active='start';}
+npState.buf='';
+}
+}
+npRender();
+}
+function npDel(){npState.buf=npState.buf.slice(0,-1);npRender();}
+function npClear(){npState.buf='';npRender();}
+function npFmt(v){const s=v.padStart(4,'0');return s.substring(0,2)+':'+s.substring(2,4);}
+function npRender(){
+document.getElementById('npStartText').textContent=npFmt(npState.startVal);
+document.getElementById('npEndText').textContent=npFmt(npState.endVal);
+const isStart=npState.active==='start';
+const sb=document.getElementById('npStartBox'),eb=document.getElementById('npEndBox');
+sb.style.background=isStart?'#e3f2fd':'#fff';
+sb.style.borderColor=isStart?'#1a73e8':'var(--bdr)';
+document.getElementById('npStartText').style.color=isStart?'#1a73e8':'var(--txt)';
+eb.style.background=!isStart?'#fff3e0':'#fff';
+eb.style.borderColor=!isStart?'#f57c00':'var(--bdr)';
+document.getElementById('npEndText').style.color=!isStart?'#f57c00':'var(--txt)';
+const buf=npState.buf;
+const hPart=buf.length>=1?buf.substring(0,Math.min(2,buf.length)).padEnd(2,'_'):'__';
+const mPart=buf.length>=3?buf.substring(2,4).padEnd(2,'_'):'__';
+document.getElementById('npBuffer').textContent=buf.length>0?hPart+':'+mPart:'';
+document.getElementById('npHint').textContent=buf.length===0?(isStart?'출근 시간을 입력하세요':'퇴근 시간을 입력하세요'):'';
+}
+// ===== 숫자패드 끝 =====
+
+// PWA 서비스워커 등록
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('manager-sw.js').catch(()=>{});
+}
+
+console.log('🚀 알바관리 Pro — Firebase 실시간 연동');
+
+
+function initBoss(){
+  checkLock();loadWp();loadEmp();renderIns();loadEmpSelect();renderCal();loadPayroll();loadPinSettings();
+  var s=document.getElementById('settingSaveBar');if(s)s.style.display='block';
+}
+
+
+
+
+const ST_W={EMP:'alba_emp',REC:'alba_rec'};
+let wCurEmp=null, wCurDate=new Date(), wCurWorkDate='';
+
+// 전화번호 조회
+function wLookupPhone(){
+  var phone=document.getElementById('phoneInput').value.replace(/[^0-9]/g,'');
+  if(phone.length<9){document.getElementById('phoneMsg').textContent='전화번호를 정확히 입력하세요';return;}
+  document.getElementById('phoneMsg').textContent='조회 중...';
+  var emps=JSON.parse(localStorage.getItem(ST_W.EMP)||'[]');
+  var found=emps.find(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== phone;});
+  if(found){wSetEmp(found,emps);return;}
+  if(window._fbGet&&window._fbRef&&window._fbDb){
+    window._fbGet(window._fbRef(window._fbDb,'alba_employees')).then(function(snap){
+      if(snap.exists()){
+        var list=Object.values(snap.val());
+        window._lastEmpList=list;
+        var f=list.find(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== phone;});
+        if(f){wSetEmp(f,list);}
+        else{document.getElementById('phoneMsg').textContent='등록된 번호가 없습니다. 사장님께 문의하세요.';}
+      }else{document.getElementById('phoneMsg').textContent='등록된 번호가 없습니다.';}
+    }).catch(function(){document.getElementById('phoneMsg').textContent='조회 실패. 다시 시도하세요.';});
+  }else{document.getElementById('phoneMsg').textContent='등록된 번호가 없습니다.';}
+}
+
+function wSetEmp(emp, allEmps){
+  wCurEmp=emp;
+  var phone=(emp.phone||'').replace(/[^0-9]/g,'');
+  if(phone) localStorage.setItem('alba_saved_phone', phone);
+  document.getElementById('phoneCard').style.display='none';
+  document.getElementById('nameCard').style.display='block';
+  document.getElementById('nameView').textContent=emp.name;
+  document.getElementById('wpView').textContent=emp.wp||'-';
+  document.getElementById('phoneMsg').textContent='';
+  document.getElementById('wSelDelBtn').style.display='block';
+  var empList=allEmps||window._lastEmpList||[];
+  var samePhone=empList.filter(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== phone;});
+  window._samePhoneEmps=samePhone;
+  document.getElementById('changeWpBtn').style.display='block';
+  wRenderCal(); wRenderTotal();
+}
+
+function showWpPopup(){
+  var emps=window._samePhoneEmps||[];
+  var list=document.getElementById('wpPopupList');
+  if(!emps.length){
+    list.innerHTML='<div style="text-align:center;color:var(--mut);font-size:13px;padding:10px;">등록된 근무지가 없습니다</div>';
+  } else {
+    list.innerHTML=emps.map(function(e,i){
+      var active=wCurEmp&&wCurEmp.wp===e.wp;
+      return '<button onclick="selectWpFromPopup('+i+')" style="display:block;width:100%;padding:12px;margin-bottom:8px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;text-align:center;'+(active?'background:linear-gradient(180deg,#43a047 0%,#2e7d32 100%);color:#fff;box-shadow:0 3px 0 #0a2e0f;':'background:var(--sur2);color:var(--txt);')+'">'+e.wp+'</button>';
+    }).join('');
+  }
+  document.getElementById('wpPopup').style.display='flex';
+}
+
+function selectWpFromPopup(idx){
+  var emps=window._samePhoneEmps||[];
+  var emp=emps[idx];
+  if(!emp)return;
+  wCurEmp=emp;
+  document.getElementById('wpView').textContent=emp.wp||'-';
+  document.getElementById('wpPopup').style.display='none';
+  wRenderCal();wRenderTotal();
+  showToast(emp.wp+' 로 변경됐습니다');
+}
+
+function showWpSelect(){showWpPopup();}
+
+
+function changeWp(){
+  var emps=window._samePhoneEmps||[];
+  var idx=parseInt(document.getElementById('wpSelect').value);
+  var emp=emps[idx];
+  if(!emp)return;
+  wCurEmp=emp;
+  document.getElementById('wpView').textContent=emp.wp||'-';
+  document.getElementById('wpSelectWrap').style.display='none';
+  document.getElementById('changeWpBtn').style.display='block';
+  wRenderCal(); wRenderTotal(); showToast(emp.wp+' 로 변경됐습니다');
+}
+
+// 선택삭제
+var wSelMode=false, wSelDates=new Set();
+function wStartSelectDel(){
+  wSelMode=true; wSelDates=new Set();
+  document.getElementById('wSelDelBtn').style.display='none';
+  document.getElementById('wSelDelBar').style.display='block';
+  document.getElementById('wSelCount').textContent='0';
+  wRenderCal();
+}
+function wCancelSelectDel(){
+  wSelMode=false; wSelDates=new Set();
+  document.getElementById('wSelDelBar').style.display='none';
+  document.getElementById('wSelDelBtn').style.display='block';
+  wRenderCal();
+}
+function wToggleSel(ds){
+  if(wSelDates.has(ds))wSelDates.delete(ds); else wSelDates.add(ds);
+  document.getElementById('wSelCount').textContent=wSelDates.size;
+  wRenderCal();
+}
+function wConfirmSelectDel(){
+  if(!wSelDates.size){showToast('삭제할 날짜를 선택하세요');return;}
+  customConfirm('근무 삭제',wSelDates.size+'일치 근무를 삭제하시겠습니까?',function(){
+    var recs=JSON.parse(localStorage.getItem(ST_W.REC)||'[]');
+    var filtered=recs.filter(function(r){return !(r.emp===wCurEmp.name&&wSelDates.has(r.date));});
+    localStorage.setItem(ST_W.REC,JSON.stringify(filtered));
+    wCancelSelectDel(); wRenderTotal();
+    showToast(wSelDates.size+'일치 근무가 삭제되었습니다');
+  });
+}
+
+function wPrevMonth(){wCurDate.setMonth(wCurDate.getMonth()-1);wRenderCal();wRenderTotal();}
+function wNextMonth(){wCurDate.setMonth(wCurDate.getMonth()+1);wRenderCal();wRenderTotal();}
+
+function getRecs(){return JSON.parse(localStorage.getItem(ST_W.REC)||'[]');}
+function saveRecs(r){localStorage.setItem(ST_W.REC,JSON.stringify(r));}
+
+function wRenderCal(){
+  var y=wCurDate.getFullYear(), m=wCurDate.getMonth();
+  document.getElementById('wCalTitleText').textContent=y+'년 '+(m+1)+'월';
+  var first=new Date(y,m,1).getDay(), last=new Date(y,m+1,0).getDate();
+  var recs=getRecs();
+  var html='';
+  var days=['일','월','화','수','목','금','토'];
+  for(var di=0;di<7;di++){
+    var dc=di===0?'color:#ef5350':di===6?'color:#1976d2':'';
+    html+='<div style="height:28px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;'+dc+'">'+days[di]+'</div>';
+  }
+  for(var bi=0;bi<first;bi++) html+='<div style="height:68px;"></div>';
+  var today=new Date(); today.setHours(0,0,0,0);
+  for(var d=1;d<=last;d++){
+    var date=new Date(y,m,d); date.setHours(0,0,0,0);
+    var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var works=wCurEmp?recs.filter(function(r){return r.emp===wCurEmp.name&&r.date===ds;}):[];
+    var bg='background:#fff;border:1.5px solid var(--bdr);';
+    if(date.getTime()===today.getTime()) bg='background:#fff9c4;border:1.5px solid #fbc02d;';
+    if(works.length) bg='background:#e3f2fd;border:1.5px solid #1976d2;';
+    var hrs=works.length?'<div style="font-size:9px;color:#1976d2;font-weight:700;">'+works.reduce(function(s,w){return s+w.hours;},0).toFixed(2)+'h</div>':'';
+    var badge='';
+    var click='';
+    if(wSelMode&&works.length){
+      var sel=wSelDates.has(ds);
+      if(sel) bg='background:#ffebee;border:2.5px solid #c62828;';
+      badge=sel?'<span style="position:absolute;top:1px;right:1px;background:#c62828;color:#fff;font-size:9px;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;">✓</span>':'';
+      click='onclick="wToggleSel(\'' + ds + '\')"';
+    } else if(wSelMode){
+      click='';
+    } else {
+      click=wCurEmp?'onclick="openWork(\'' + ds + '\')"':'';
+    }
+    html+='<div style="height:68px;'+bg+'border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;box-shadow:0 2px 0 #c8cdd6;" '+click+'><div style="font-weight:700;font-size:12px;">'+d+'</div>'+hrs+badge+'</div>';
+  }
+  document.getElementById('wCalendar').innerHTML=html;
+}
+
+function wRenderTotal(){
+  var y=wCurDate.getFullYear(), m=wCurDate.getMonth();
+  var recs=wCurEmp?getRecs().filter(function(r){var d=new Date(r.date);return r.emp===wCurEmp.name&&d.getFullYear()===y&&d.getMonth()===m;}):[];
+  document.getElementById('wTotalHours').textContent=recs.reduce(function(s,w){return s+w.hours;},0).toFixed(2)+'h';
+}
+
+function wSendToManager(){
+  if(!wCurEmp){showToast('전화번호를 먼저 입력하세요');return;}
+  var y=wCurDate.getFullYear(), m=wCurDate.getMonth();
+  var recs=getRecs();
+  var myRecs=recs.filter(function(r){var d=new Date(r.date);return r.emp===wCurEmp.name&&d.getFullYear()===y&&d.getMonth()===m;});
+  if(!myRecs.length){showToast('전송할 근무 데이터가 없습니다');return;}
+  var payload={type:'alba_work_data',emp:wCurEmp.name,wp:wCurEmp.wp||'',year:y,month:m+1,records:myRecs,sentAt:new Date().toISOString()};
+  var resultEl=document.getElementById('wSendResult');
+  resultEl.innerHTML='<div style="font-weight:700;font-size:14px;">전송 중...</div>';
+  document.getElementById('wSendModal').style.display='flex';
+  if(window._fbDb&&window._fbPush&&window._fbRef){
+    window._fbPush(window._fbRef(window._fbDb,'alba_pending'),payload)
+      .then(function(){resultEl.innerHTML='<div style="font-weight:700;font-size:16px;margin-bottom:8px;">전송 완료!</div><div style="font-size:13px;color:var(--mut);">'+wCurEmp.name+' · '+y+'년 '+(m+1)+'월 · '+myRecs.length+'건</div><div style="margin-top:10px;font-size:12px;color:#2e7d32;font-weight:700;">사장앱에 자동으로 전달됩니다</div>';})
+      .catch(function(){showToast('전송 실패');});
+  }
+}
+
+
+
+function initWorker(){
+  var now=new Date();
+  wCurDate=new Date(now.getFullYear(),now.getMonth(),1);
+  wRenderCal();
+  var savedPhone=localStorage.getItem('alba_saved_phone');
+  if(savedPhone){
+    if(window._fbGet&&window._fbRef&&window._fbDb){
+      window._fbGet(window._fbRef(window._fbDb,'alba_employees')).then(function(snap){
+        if(snap.exists()){
+          var list=Object.values(snap.val());
+          window._lastEmpList=list;
+          var f=list.find(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== savedPhone;});
+          if(f){wSetEmp(f,list);}else{localStorage.removeItem('alba_saved_phone');}
+        }
+      }).catch(function(){
+        var emps=JSON.parse(localStorage.getItem('alba_emp')||'[]');
+        var f=emps.find(function(e){return (e.phone||'').replace(/[^0-9]/g,'')=== savedPhone;});
+        if(f){wSetEmp(f,emps);}
+      });
+    }
+  }
+}
+</script>
+</body>
+</html>
